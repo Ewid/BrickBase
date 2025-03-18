@@ -865,11 +865,11 @@
 	},
 	"sources": {
 		"contracts/tokens/PropertyNFT.sol": {
-			"keccak256": "0x838a3e6d2eaf4b9af7a7c66e765eac3767fa0ca78aa25ceb8d544582e3ce0349",
+			"keccak256": "0x3f929e8ea34af198fe0df458b8a5bd9e38c81a271da706fbe6f8aa1f5fa60e36",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://552105582f057c871f8e8f7e5eb0e032a91ef085f71820699d0ab5a1161d8079",
-				"dweb:/ipfs/QmfFkeqw11B8hWdY7RER1YHJMprRKBKvMM4GevMSYseNKd"
+				"bzz-raw://8202db2d86a8d7a5b83f4f132dfcf18cb923a6a8d4b34bb41d6de61eee234ce6",
+				"dweb:/ipfs/QmVn49Teg6pMe3bLUdHR1fC3daxogty6b4XjY3tv9CuYzh"
 			]
 		},
 		"contracts/tokens/PropertyToken.sol": {

@@ -47,9 +47,6 @@ contract PropertyNFT is ERC721URIStorage, Ownable {
             propertyToken: _propertyToken
         });
         
-        // Link the PropertyToken to this NFT
-        PropertyToken(_propertyToken).setPropertyNFT(address(this));
-        
         return tokenId;
     }
     
