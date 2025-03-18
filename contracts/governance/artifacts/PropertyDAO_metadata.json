@@ -1,6 +1,6 @@
 {
 	"compiler": {
-		"version": "0.8.26+commit.8a97fa7a"
+		"version": "0.8.29+commit.ab55807c"
 	},
 	"language": "Solidity",
 	"output": {
@@ -601,7 +601,15 @@
 		"remappings": []
 	},
 	"sources": {
-		"@openzeppelin/contracts/access/Ownable.sol": {
+		"contracts/governance/PropertyDAO.sol": {
+			"keccak256": "0x641a981262c49326f6a6f5d80deab27060944eea3761fb7aff18d9afc97a90fa",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://bffbe0c5329460450c91c39f64c7a8a59b00cf1a24aa15655ed7a8716c45cae4",
+				"dweb:/ipfs/QmWXiPeR3W1SQB7nLyDirMAuih2SjdNo8Kc26i6ipynHhn"
+			]
+		},
+		"https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.0.0/contracts/access/Ownable.sol": {
 			"keccak256": "0xff6d0bb2e285473e5311d9d3caacb525ae3538a80758c10649a4d61029b017bb",
 			"license": "MIT",
 			"urls": [
@@ -609,28 +617,20 @@
 				"dweb:/ipfs/QmfEckWLmZkDDcoWrkEvMWhms66xwTLff9DDhegYpvHo1a"
 			]
 		},
-		"@openzeppelin/contracts/token/ERC20/IERC20.sol": {
-			"keccak256": "0xe06a3f08a987af6ad2e1c1e774405d4fe08f1694b67517438b467cecf0da0ef7",
+		"https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.0.0/contracts/token/ERC20/IERC20.sol": {
+			"keccak256": "0xc6a8ff0ea489379b61faa647490411b80102578440ab9d84e9a957cc12164e70",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://df6f0c459663c9858b6cba2cda1d14a7d05a985bed6d2de72bd8e78c25ee79db",
-				"dweb:/ipfs/QmeTTxZ7qVk9rjEv2R4CpCwdf8UMCcRqDNMvzNxHc3Fnn9"
+				"bzz-raw://0ea104e577e63faea3b69c415637e99e755dcbf64c5833d7140c35a714d6d90c",
+				"dweb:/ipfs/Qmau6x4Ns9XdyynRCNNp3RhLqijJjFm7z5fyZazfYFGYdq"
 			]
 		},
-		"@openzeppelin/contracts/utils/Context.sol": {
-			"keccak256": "0x493033a8d1b176a037b2cc6a04dad01a5c157722049bbecf632ca876224dd4b2",
+		"https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.0.0/contracts/utils/Context.sol": {
+			"keccak256": "0x75a4ee64c68dbd5f38bddd06e664a64c8271b4caa554fb6f0607dfd672bb4bf3",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://6a708e8a5bdb1011c2c381c9a5cfd8a9a956d7d0a9dc1bd8bcdaf52f76ef2f12",
-				"dweb:/ipfs/Qmax9WHBnVsZP46ZxEMNRQpLQnrdE4dK8LehML1Py8FowF"
-			]
-		},
-		"contracts/governance/PropertyDAO.sol": {
-			"keccak256": "0xdeb87af7fbe3478a0aafcb68d0c963c2939cca1a37fe2461e752b031fd6bbed1",
-			"license": "MIT",
-			"urls": [
-				"bzz-raw://a5138ef00cc398cf11b716acb438764578ec3621777326920f8951d01aeac04c",
-				"dweb:/ipfs/QmUfxZGsQDyCTNR4tM29uHm1nodrHPJux4WnXAZonNxevs"
+				"bzz-raw://0c4e6cb30d3601e2f7af5af09e265508147cb275a8dcd99d6f7363645cc56867",
+				"dweb:/ipfs/QmNgFkoXNWoUbAyw71rr1sKQ95Rj2GfvYiWg79xEYDn2NY"
 			]
 		}
 	},

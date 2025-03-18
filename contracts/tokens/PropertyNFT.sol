@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.0.0/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.0.0/contracts/access/Ownable.sol";
 import "./PropertyToken.sol";
 
 contract PropertyNFT is ERC721URIStorage, Ownable {
@@ -62,7 +62,13 @@ contract PropertyNFT is ERC721URIStorage, Ownable {
         uint256 _constructionYear,
         string memory _propertyType
     ) external {
-        require(_isApprovedOrOwner(msg.sender, tokenId), "Not approved or owner");
+        // Check if the sender is the owner or approved
+        require(
+            _ownerOf(tokenId) == msg.sender || 
+            getApproved(tokenId) == msg.sender || 
+            isApprovedForAll(_ownerOf(tokenId), msg.sender),
+            "Not approved or owner"
+        );
         
         PropertyDetails storage property = properties[tokenId];
         property.propertyAddress = _propertyAddress;

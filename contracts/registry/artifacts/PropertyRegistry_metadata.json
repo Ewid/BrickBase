@@ -1,6 +1,6 @@
 {
 	"compiler": {
-		"version": "0.8.26+commit.8a97fa7a"
+		"version": "0.8.29+commit.ab55807c"
 	},
 	"language": "Solidity",
 	"output": {
@@ -321,7 +321,15 @@
 		"remappings": []
 	},
 	"sources": {
-		"@openzeppelin/contracts/access/Ownable.sol": {
+		"contracts/registry/PropertyRegistry.sol": {
+			"keccak256": "0xf813bf12e3bf473099c005bc7e310ae1f840dc0eed165a5f6f18cd6514626e05",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://dfe3fca0f44f4fc97cbbe31d405a8433bef8e7804590d80f14e0d35aef92acea",
+				"dweb:/ipfs/Qmf2JYaPBC37dgs61s2ZwaRCkvxpW3J1FWMdhxbCsMRPZp"
+			]
+		},
+		"https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.0.0/contracts/access/Ownable.sol": {
 			"keccak256": "0xff6d0bb2e285473e5311d9d3caacb525ae3538a80758c10649a4d61029b017bb",
 			"license": "MIT",
 			"urls": [
@@ -329,20 +337,12 @@
 				"dweb:/ipfs/QmfEckWLmZkDDcoWrkEvMWhms66xwTLff9DDhegYpvHo1a"
 			]
 		},
-		"@openzeppelin/contracts/utils/Context.sol": {
-			"keccak256": "0x493033a8d1b176a037b2cc6a04dad01a5c157722049bbecf632ca876224dd4b2",
+		"https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.0.0/contracts/utils/Context.sol": {
+			"keccak256": "0x75a4ee64c68dbd5f38bddd06e664a64c8271b4caa554fb6f0607dfd672bb4bf3",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://6a708e8a5bdb1011c2c381c9a5cfd8a9a956d7d0a9dc1bd8bcdaf52f76ef2f12",
-				"dweb:/ipfs/Qmax9WHBnVsZP46ZxEMNRQpLQnrdE4dK8LehML1Py8FowF"
-			]
-		},
-		"contracts/registry/PropertyRegistry.sol": {
-			"keccak256": "0x8cf34dc7cb89cbb5de0b492d887733664b7b31987828b33a918ae1ec8d9f18c8",
-			"license": "MIT",
-			"urls": [
-				"bzz-raw://f313b862c2419ead1a438bfd75fa8fb563f681cece03e316b09b9a4d3615cb33",
-				"dweb:/ipfs/QmS2UxSvapT3F4vrAe4SemH4VkecQtcNUib5SBZP9GUGbd"
+				"bzz-raw://0c4e6cb30d3601e2f7af5af09e265508147cb275a8dcd99d6f7363645cc56867",
+				"dweb:/ipfs/QmNgFkoXNWoUbAyw71rr1sKQ95Rj2GfvYiWg79xEYDn2NY"
 			]
 		}
 	},
