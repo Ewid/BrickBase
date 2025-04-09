@@ -74,4 +74,15 @@ contract PropertyNFT is ERC721URIStorage, Ownable {
         property.constructionYear = _constructionYear;
         property.propertyType = _propertyType;
     }
+
+    /**
+     * @dev Updates the token URI for a given token ID.
+     * Can only be called by the contract owner.
+     * @param tokenId The ID of the token to update.
+     * @param _newTokenURI The new URI to set for the token.
+     */
+    function updateTokenURI(uint256 tokenId, string memory _newTokenURI) external onlyOwner {
+        _ownerOf(tokenId); // Check token existence by attempting to get owner (will revert if non-existent)
+        _setTokenURI(tokenId, _newTokenURI);
+    }
 }

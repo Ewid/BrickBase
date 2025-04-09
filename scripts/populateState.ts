@@ -12,14 +12,14 @@ import {
 
 dotenv.config();
 
-// --- Deployed Contract Addresses (Base Sepolia) - Updated --- 
+// --- Deployed Contract Addresses (Base Sepolia) - Updated ---
 const addresses = {
-  propertyToken: "0x6fb0d9B37a681187C85E505596B45c4B3bE09222",     // <-- New Address
-  propertyNFT: "0xC072f717869bb13c04d4C76E933a66b4c0d47FE0",       // <-- New Address
-  propertyRegistry: "0x1330a7aE207a0A8585e6c6ef543b4Ef59568c4b9",    // <-- New Address
-  rentDistribution: "0x1e46B665D8f99E0cC878Ada6dF7F373e3552D66F",    // <-- New Address
-  propertyMarketplace: "0x0B39C0f5F9de8B567116FFdB15543811491DF976",   // <-- New Address
-  propertyDAO: "0xa9f40Edcd67c4954c9Fd04D477cD28c3B753c48f",          // <-- New Address
+  propertyToken: "0x8359C4B3185b7456f0318E607c37C9eaa3071A54",     // <-- New Address
+  propertyNFT: "0xda988e1D11748E6589ac8a256A6cb61A3dd4F9D2",       // <-- New Address
+  propertyRegistry: "0x6807d1F14275CCCC3b3b7258C8af5Dc317AfC9b7",    // <-- New Address
+  rentDistribution: "0x2059065Edb9a1D7d48103fC9C04f68Fd521C0d27",    // <-- New Address
+  propertyMarketplace: "0xE2222aE22195e4414052613e6fDA69B141Aa61aC",   // <-- New Address
+  propertyDAO: "0x6434590195F96517b66b81f8556fa2e2CE3046d2",          // <-- New Address
 };
 // --- ABI Paths (Adjust if necessary) ---
 // NOTE: Using TypeChain types makes dynamic ABI loading less critical,
@@ -68,42 +68,69 @@ async function main() {
   // === 1. Register Properties ===
   console.log("\n=== Step 1: Registering Properties ===");
 
-  // --- Mint NFTs (Owner) ---
-  // Check current NFT balances or skip if already minted if needed
-  console.log("Attempting to mint Property NFT 1 (Token ID 0)...");
+  // --- Define Token URIs (Using actual CIDs from Pinata uploads) ---
+  const tokenURI_0 = "ipfs://bafkreibxj7lrlamimk7tuqnnsorsk7ojzvmnh6bzewmrsglz6uayeq2ypu"; // Actual CID for Property 0
+  const tokenURI_1 = "ipfs://bafybeigfbwtvxp5exbjywyinbit4gamuefffbqmzvvzfpvregytqxlff6q"; // Actual CID for Property 1
+
+  // --- Mint/Update NFTs (Owner) ---
+
+  // --- Token ID 0 ---
+  console.log("Attempting to mint or update Property NFT 1 (Token ID 0)...");
   try {
-    // Check if token ID 0 already exists - this prevents re-minting errors
-     await propertyNFT.ownerOf(0);
-     console.log("NFT 1 (ID 0) already minted.");
+    // Check if token ID 0 already exists
+    await propertyNFT.ownerOf(0);
+    console.log("NFT 1 (ID 0) already exists. Checking URI...");
+    const currentURI_0 = await propertyNFT.tokenURI(0);
+    if (currentURI_0 !== tokenURI_0) {
+      console.log(`Current URI ('${currentURI_0}') differs. Updating to '${tokenURI_0}'...`);
+      const updateTx = await propertyNFT.updateTokenURI(0, tokenURI_0);
+      await updateTx.wait();
+      console.log("NFT 1 (ID 0) URI updated. Tx:", updateTx.hash);
+    } else {
+      console.log("NFT 1 (ID 0) URI is already correct. Skipping update.");
+    }
   } catch (error) {
     // If ownerOf fails, the token likely doesn't exist yet
     console.log("Minting Property NFT 1 (Token ID 0)...");
     const tx1 = await propertyNFT.mintProperty(
       owner.address,
-      "ipfs://dummyURI_Property1", "1 Property Lane", 1000,
+      tokenURI_0,
+      "1 Property Lane", 1000,
       ethers.parseUnits("500000", 6), 2020, "Residential",
-      addresses.propertyToken
+      addresses.propertyToken // Ensure this is the correct associated token address
     );
     await tx1.wait();
     console.log("NFT 1 (ID 0) minted. Tx:", tx1.hash);
   }
 
- console.log("Attempting to mint Property NFT 2 (Token ID 1)...");
+  // --- Token ID 1 ---
+  console.log("\nAttempting to mint or update Property NFT 2 (Token ID 1)...");
   try {
-     await propertyNFT.ownerOf(1);
-     console.log("NFT 2 (ID 1) already minted.");
+    // Check if token ID 1 already exists
+    await propertyNFT.ownerOf(1);
+    console.log("NFT 2 (ID 1) already exists. Checking URI...");
+    const currentURI_1 = await propertyNFT.tokenURI(1);
+    if (currentURI_1 !== tokenURI_1) {
+      console.log(`Current URI ('${currentURI_1}') differs. Updating to '${tokenURI_1}'...`);
+      const updateTx = await propertyNFT.updateTokenURI(1, tokenURI_1);
+      await updateTx.wait();
+      console.log("NFT 2 (ID 1) URI updated. Tx:", updateTx.hash);
+    } else {
+      console.log("NFT 2 (ID 1) URI is already correct. Skipping update.");
+    }
   } catch (error) {
+    // If ownerOf fails, the token likely doesn't exist yet
     console.log("Minting Property NFT 2 (Token ID 1)...");
     const tx2 = await propertyNFT.mintProperty(
       owner.address,
-      "ipfs://dummyURI_Property2", "2 Asset Avenue", 1500,
+      tokenURI_1,
+      "2 Asset Avenue", 1500,
       ethers.parseUnits("750000", 6), 2021, "Commercial",
-      addresses.propertyToken
+      addresses.propertyToken // Ensure this is the correct associated token address
     );
     await tx2.wait();
     console.log("NFT 2 (ID 1) minted. Tx:", tx2.hash);
- }
-
+  }
 
   // --- Register NFT/Token Contract Pair (Owner) ---
   console.log(`Registering PropertyNFT contract (${addresses.propertyNFT}) with PropertyToken contract (${addresses.propertyToken})...`);
@@ -143,7 +170,7 @@ async function main() {
     console.log(`Test User balance is insufficient. Attempting to transfer ${ethers.formatUnits(maxSupply, 18)} tokens from Owner (${owner.address})...`);
     try {
       // Assuming owner holds the tokens if they weren't minted to testUser
-      const transferTx = await propertyToken.connect(owner).transfer(testUser.address, maxSupply); 
+      const transferTx = await propertyToken.connect(owner).transfer(testUser.address, maxSupply);
       await transferTx.wait();
       testUserBalanceCheck = await propertyToken.balanceOf(testUser.address);
       console.log(`Transfer successful. New Test User balance: ${ethers.formatUnits(testUserBalanceCheck, 18)}`);
@@ -177,67 +204,84 @@ async function main() {
       console.log("Marketplace already has sufficient allowance.");
   }
 
-  // --- Add Pre-Checks for Listing --- 
+  // --- Add Pre-Checks for Listing ---
   const testUserBalance = await propertyToken.balanceOf(testUser.address);
   const marketplaceAllowance = await propertyToken.allowance(testUser.address, addresses.propertyMarketplace);
   console.log(`Pre-Listing Check: TestUser Balance=${ethers.formatUnits(testUserBalance, 18)}, Marketplace Allowance=${ethers.formatUnits(marketplaceAllowance, 18)}`);
 
   if (testUserBalance < listAmount) {
       console.error(`ERROR: TestUser balance (${ethers.formatUnits(testUserBalance, 18)}) is less than required list amount (${ethers.formatUnits(listAmount, 18)}). Stopping.`);
-      return; 
+      return;
   }
   if (marketplaceAllowance < listAmount) {
        console.error(`ERROR: Marketplace allowance (${ethers.formatUnits(marketplaceAllowance, 18)}) is less than required list amount (${ethers.formatUnits(listAmount, 18)}). Stopping.`);
-      return; 
+      return;
   }
 
   // --- Create Listing (Test User) ---
   // Ideally, check if a similar listing already exists to avoid duplicates if the script is run multiple times
   console.log(`Test User creating listing for ${ethers.formatUnits(listAmount, 18)} tokens at ${ethers.formatEther(pricePerTokenWei)} ETH each...`);
-  const tx6 = await propertyMarketplace.connect(testUser).createListing(
-    addresses.propertyToken,
-    listAmount,
-    pricePerTokenWei
-  );
-  const receipt6 = await tx6.wait();
-  // Extract listing ID from event
-   let listingId = 0n; // Default assumption
-   const listingCreatedEvent = receipt6?.logs.find(
-       (log: any) => {
-            try {
-                const parsedLog = propertyMarketplace.interface.parseLog(log);
-                return parsedLog?.name === "ListingCreated";
-            } catch { return false; } // Ignore logs that don't match the ABI
-        }
-   );
-   if (listingCreatedEvent) {
-       const parsed = propertyMarketplace.interface.parseLog(listingCreatedEvent as any);
-       listingId = parsed?.args.listingId;
-       console.log(`Listing created with ID: ${listingId}`);
-   } else {
-       console.warn("Could not find ListingCreated event to determine listing ID, assuming 0.");
-   }
+  let listingId = 0n; // Default assumption
+  try {
+      const tx6 = await propertyMarketplace.connect(testUser).createListing(
+          addresses.propertyToken,
+          listAmount,
+          pricePerTokenWei
+      );
+      const receipt6 = await tx6.wait();
+      // Extract listing ID from event
+      const listingCreatedEvent = receipt6?.logs.find(
+          (log: any) => {
+              try {
+                  const parsedLog = propertyMarketplace.interface.parseLog(log);
+                  return parsedLog?.name === "ListingCreated";
+              } catch { return false; } // Ignore logs that don't match the ABI
+          }
+      );
+      if (listingCreatedEvent) {
+          const parsed = propertyMarketplace.interface.parseLog(listingCreatedEvent as any);
+          listingId = parsed?.args.listingId;
+          console.log(`Listing created with ID: ${listingId}`);
+      } else {
+          console.warn("Could not find ListingCreated event to determine listing ID, assuming 0 for purchase attempt.");
+      }
+  } catch (error: any) {
+      console.error(`ERROR: Failed to create listing: ${error.message}`);
+      // Decide if we should stop or continue without a listing ID
+      console.log("Skipping purchase step due to listing creation failure.");
+      listingId = -1n; // Indicate failure
+  }
 
 
   // === 3. Purchase from Listing ===
   console.log("\n=== Step 3: Purchasing from Listing ===");
-  const purchaseAmount = ethers.parseUnits("10", 18); // Buy 10 tokens (Reduced)
-  const listingInfo = await propertyMarketplace.listings(listingId); // Fetch current listing state
-
-  if (!listingInfo.isActive || listingInfo.tokenAmount < purchaseAmount) {
-      console.log(`Listing ${listingId} is inactive or has insufficient tokens (${ethers.formatUnits(listingInfo.tokenAmount, 18)}). Skipping purchase.`);
+  if (listingId < 0n) {
+      console.log("Skipping purchase because listing creation failed or ID was not found.");
   } else {
-      const calculatedPricePerToken = listingInfo.pricePerToken; // Use price from listing
-      const totalCostWei = purchaseAmount * calculatedPricePerToken / (10n**18n);
+      const purchaseAmount = ethers.parseUnits("10", 18); // Buy 10 tokens (Reduced)
+      try {
+          const listingInfo = await propertyMarketplace.listings(listingId); // Fetch current listing state
 
-      console.log(`Owner purchasing ${ethers.formatUnits(purchaseAmount, 18)} tokens from listing ${listingId} for ${ethers.formatEther(totalCostWei)} ETH...`);
-      const tx7 = await propertyMarketplace.connect(owner).purchaseTokens(
-        listingId,
-        purchaseAmount,
-        { value: totalCostWei }
-      );
-      await tx7.wait();
-      console.log("Tokens purchased. Tx:", tx7.hash);
+          if (!listingInfo.isActive) {
+              console.log(`Listing ${listingId} is inactive. Skipping purchase.`);
+          } else if (listingInfo.tokenAmount < purchaseAmount) {
+              console.log(`Listing ${listingId} has insufficient tokens (${ethers.formatUnits(listingInfo.tokenAmount, 18)} < ${ethers.formatUnits(purchaseAmount, 18)}). Skipping purchase.`);
+          } else {
+              const calculatedPricePerToken = listingInfo.pricePerToken; // Use price from listing
+              const totalCostWei = purchaseAmount * calculatedPricePerToken / (10n**18n);
+
+              console.log(`Owner purchasing ${ethers.formatUnits(purchaseAmount, 18)} tokens from listing ${listingId} for ${ethers.formatEther(totalCostWei)} ETH...`);
+              const tx7 = await propertyMarketplace.connect(owner).purchaseTokens(
+                  listingId,
+                  purchaseAmount,
+                  { value: totalCostWei }
+              );
+              await tx7.wait();
+              console.log("Tokens purchased. Tx:", tx7.hash);
+          }
+      } catch (error: any) {
+          console.error(`ERROR: Failed to purchase from listing ${listingId}: ${error.message}`);
+      }
   }
 
   // === 4. Deposit Rent ===
@@ -245,12 +289,16 @@ async function main() {
   const rentAmountWei = ethers.parseEther("0.01"); // Reduce rent deposit amount
 
   console.log(`Owner depositing ${ethers.formatEther(rentAmountWei)} ETH as rent for PropertyToken ${addresses.propertyToken}...`);
-  const tx8 = await rentDistribution.connect(owner).depositRent(
-    addresses.propertyToken,
-    { value: rentAmountWei }
-  );
-  await tx8.wait();
-  console.log("Rent deposited. Tx:", tx8.hash);
+  try {
+      const tx8 = await rentDistribution.connect(owner).depositRent(
+          addresses.propertyToken,
+          { value: rentAmountWei }
+      );
+      await tx8.wait();
+      console.log("Rent deposited. Tx:", tx8.hash);
+  } catch (error: any) {
+      console.error(`ERROR: Failed to deposit rent: ${error.message}`);
+  }
 
   // === 5. Create a DAO Proposal ===
   console.log("\n=== Step 5: Creating DAO Proposals ===");
@@ -271,14 +319,14 @@ async function main() {
           console.error("Failed to create generic proposal:", e.message);
       }
 
-      // --- "Expense" Proposal (Test User) ---
+      // --- \"Expense" Proposal (Test User) ---
       console.log("Test User creating 'Expense' DAO proposal...");
       try {
           const tx10 = await propertyDAO.connect(testUser).createProposal(
               "Expense: Pay janitor bill $50", ethers.ZeroAddress, "0x"
           );
           await tx10.wait();
-          console.log("'Expense' proposal created. Tx:", tx10.hash);
+          console.log("\'Expense\' proposal created. Tx:", tx10.hash);
       } catch (e: any) {
           console.error("Failed to create expense proposal:", e.message);
       }
