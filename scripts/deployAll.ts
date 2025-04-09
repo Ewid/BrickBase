@@ -31,12 +31,10 @@ async function main() {
   const propertyNFTAddress = await propertyNFT.getAddress();
   console.log(`PropertyNFT deployed to: ${propertyNFTAddress}`);
 
-  // Optional: Set the PropertyNFT address in the PropertyToken contract
-  // console.log("Setting PropertyNFT address in PropertyToken...");
-  // await propertyToken.connect(deployer).setPropertyNFT(propertyNFTAddress);
-  // console.log("PropertyNFT address set.");
-  // Note: The PropertyNFT contract *also* stores the token address, but
-  // that's done during minting, not deployment.
+  console.log("Setting PropertyNFT address in PropertyToken...");
+  // Ensure deployer is the owner of propertyToken before calling
+  await propertyToken.connect(deployer).setPropertyNFT(propertyNFTAddress);
+  console.log("PropertyNFT address set.");
 
   // 3. Deploy PropertyRegistry (No runtime dependencies)
   console.log("\nDeploying PropertyRegistry...");
