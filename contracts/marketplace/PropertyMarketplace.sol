@@ -78,7 +78,7 @@ contract PropertyMarketplace is ReentrancyGuardUpgradeable, Ownable {
         require(listing.isActive, "Listing not active");
         require(_amount > 0 && _amount <= listing.tokenAmount, "Invalid amount");
         
-        uint256 totalPrice = _amount * listing.pricePerToken;
+        uint256 totalPrice = (_amount * listing.pricePerToken) / (10**18);
         require(msg.value >= totalPrice, "Insufficient payment");
         
         // Calculate platform fee
