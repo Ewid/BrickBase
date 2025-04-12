@@ -68,9 +68,9 @@ async function main() {
   // === 1. Register Properties ===
   console.log("\n=== Step 1: Registering Properties ===");
 
-  // --- Define Token URIs (Using actual CIDs from Pinata uploads) ---
-  const tokenURI_0 = "ipfs://bafkreibxj7lrlamimk7tuqnnsorsk7ojzvmnh6bzewmrsglz6uayeq2ypu"; // Actual CID for Property 0
-  const tokenURI_1 = "ipfs://bafybeigfbwtvxp5exbjywyinbit4gamuefffbqmzvvzfpvregytqxlff6q"; // Actual CID for Property 1
+  // --- Define Token URIs (Using actual CIDs from Pinata uploads - Updated) ---
+  const tokenURI_0 = "ipfs://bafkreidbqd3jbwk4pdayn3veiefbhcl5qqwbhooyxzggbkpfxoa4engora"; // Actual CID for Property 0 (Miami Villa)
+  const tokenURI_1 = "ipfs://bafkreiey25azlq2hwzdzwlmqyg4uoucqtsiibxpgmdnnoocjhc6nyktezm"; // Actual CID for Property 1 (Other Property)
 
   // --- Mint/Update NFTs (Owner) ---
 
@@ -133,14 +133,18 @@ async function main() {
   }
 
   // --- Register NFT/Token Contract Pair (Owner) ---
-  console.log(`Registering PropertyNFT contract (${addresses.propertyNFT}) with PropertyToken contract (${addresses.propertyToken})...`);
+  console.log(`\nChecking registration status for PropertyNFT contract (${addresses.propertyNFT})...`);
   const existingIndex = await propertyRegistry.propertyIndex(addresses.propertyNFT);
+
+  // Note: propertyIndex returns 0 if not found, or length+1 if found.
   if (existingIndex === 0n) {
+      console.log(`PropertyNFT contract (${addresses.propertyNFT}) not yet registered. Attempting registration...`);
       const tx3 = await propertyRegistry.registerProperty(addresses.propertyNFT, addresses.propertyToken);
+      console.log(`Registration transaction sent. Waiting for confirmation... Tx Hash: ${tx3.hash}`);
       await tx3.wait();
-      console.log("Contracts registered in PropertyRegistry. Tx:", tx3.hash);
+      console.log(`Contracts registered successfully in PropertyRegistry. Tx Confirmed: ${tx3.hash}`);
   } else {
-      console.log("PropertyNFT contract already registered in PropertyRegistry.");
+      console.log(`PropertyNFT contract (${addresses.propertyNFT}) already registered in PropertyRegistry at index ${existingIndex}. Skipping registration.`);
   }
 
 
