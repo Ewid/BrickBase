@@ -1,414 +1,472 @@
 // scripts/populateState.ts
 import { ethers } from "hardhat";
-import * as dotenv from "dotenv";
-import {
-  PropertyToken,
-  PropertyNFT,
-  PropertyRegistry,
-  RentDistribution,
-  PropertyMarketplace,
+import { 
+  PropertyToken, 
+  PropertyNFT, 
+  PropertyRegistry, 
+  RentDistribution, 
+  PropertyMarketplace, 
   PropertyDAO
-} from "../typechain-types"; // Import types
+} from "../typechain-types";
+import * as dotenv from "dotenv";
+import path from "path";
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
-// --- Deployed Contract Addresses (Base Sepolia) - Updated ---
-const addresses = {
-  propertyToken: "0x0B00bB2B901B607c718A4584dD236C310B28f49B",     // <-- New Address
-  propertyNFT: "0x9F360f45e68f6B36b4a5863B7C6512D0E8789157",       // <-- New Address
-  propertyRegistry: "0x04E8F7eF6AC987e55953EeB59fFB14Bb753035CE",    // <-- New Address
-  rentDistribution: "0x8655e35343e0A5621577e13181da9A8F871d1985",    // <-- New Address
-  propertyMarketplace: "0xB4D1F6B65fBf3f75a2A62BCb9307c695473Bb7D1",   // <-- New Address
-  propertyDAO: "0xA08b643C8fB9466cc2Df94dA3bC69F3876794257",          // <-- New Address
+// Get deployed contract addresses from environment variables
+interface DeployedAddresses {
+  propertyTokenFactory: string;
+  propertyNFT: string;
+  propertyRegistry: string;
+  rentDistribution: string;
+  propertyMarketplace: string;
+  propertyDAO: string;
+  // Map to store property token addresses by name
+  propertyTokens: { [key: string]: string };
+}
+
+// Populate with your deployed contract addresses or use .env
+const deployedAddresses: DeployedAddresses = {
+  propertyTokenFactory: process.env.PROPERTY_TOKEN_FACTORY_ADDRESS || "0x06b71913F6414A4cc1f6c77c68d1c0D4e9093807",
+  propertyNFT: process.env.PROPERTY_NFT_ADDRESS || "0x79744a5832E911aA8A9c35408f7409232C8AFE6D",
+  propertyRegistry: process.env.PROPERTY_REGISTRY_ADDRESS || "0x9c3A881d4ad4FdBbf07F15aAD0ea20a4cc625e81",
+  rentDistribution: process.env.RENT_DISTRIBUTION_ADDRESS || "0xf98DA6026B4cA7662a80833EC2dC757395eFaFe6",
+  propertyMarketplace: process.env.PROPERTY_MARKETPLACE_ADDRESS || "0x8b69548f445f4B76e6AC8B3deF04dD9A0587D314",
+  propertyDAO: process.env.PROPERTY_DAO_ADDRESS || "0xe04A6AB85c8E2e24b8c0fbd128E88b7981Df1b18",
+  propertyTokens: {
+    "Miami Beachfront Villa": process.env.MBV_TOKEN_ADDRESS || "0xC95137A1659d28d8a1CfCF3F7F37F2737801e007",
+    "Manhattan Luxury Condo": process.env.MLC_TOKEN_ADDRESS || "0x5419ca254Aa6635235aCd66B09Da27Ba2a72BEEB",
+    "San Francisco Modern Townhouse": process.env.SFMT_TOKEN_ADDRESS || "0x432a5cBb7278C19Ca7b3f44A7fc509f4D6e2D185",
+    "Chicago Downtown Penthouse": process.env.CDP_TOKEN_ADDRESS || "0x14fdE87ed08a7F496A9838C541AaD472Db55d68e",
+  }
 };
-// --- ABI Paths (Adjust if necessary) ---
-// NOTE: Using TypeChain types makes dynamic ABI loading less critical,
-// but paths are kept for reference or potential future use.
-const abiPaths = {
-  propertyToken: "artifacts/contracts/tokens/PropertyToken.sol/PropertyToken.json",
-  propertyNFT: "artifacts/contracts/tokens/PropertyNFT.sol/PropertyNFT.json",
-  propertyRegistry: "artifacts/contracts/registry/PropertyRegistry.sol/PropertyRegistry.json",
-  rentDistribution: "artifacts/contracts/rent/RentDistribution.sol/RentDistribution.json",
-  propertyMarketplace: "artifacts/contracts/marketplace/PropertyMarketplace.sol/PropertyMarketplace.json",
-  propertyDAO: "artifacts/contracts/governance/PropertyDAO.sol/PropertyDAO.json",
-};
 
-// Define property details with updated CIDs and complete metadata
+// Property details
 const properties = [
   {
-    tokenId: 0,
     name: "Miami Beachfront Villa",
-    tokenURI: "ipfs://bafkreighvyg3j4ajbssvszw4kzdsovo6sbycfm3cbn6pfw6uqa2qbgmamy",
-    address: "123 Ocean Drive, Miami Beach, FL 33139",
-    squareFootage: 3200,
-    purchasePrice: ethers.parseUnits("2500000", 6),
-    constructionYear: 2018,
-    propertyType: "Residential",
-    beds: 4,
-    baths: 3.5
+    symbol: "MBV",
+    value: ethers.parseUnits("2500000", 6), // $2.5M
+    tokenPrice: ethers.parseUnits("250", 6), // $250
+    supply: 10000,  // 10,000 tokens
+    monthlyRent: ethers.parseUnits("10000", 6), // $10,000/month
   },
   {
-    tokenId: 1,
     name: "Manhattan Luxury Condo",
-    tokenURI: "ipfs://bafkreifzkvccvttmnzhpcmmuz6vwpdsqjz4fcvjwa4milc2mqmojo45roa",
-    address: "555 Park Avenue, New York, NY 10022",
-    squareFootage: 1800,
-    purchasePrice: ethers.parseUnits("3200000", 6),
-    constructionYear: 2020,
-    propertyType: "Residential",
-    beds: 2,
-    baths: 2
+    symbol: "MLC",
+    value: ethers.parseUnits("3200000", 6), // $3.2M
+    tokenPrice: ethers.parseUnits("320", 6), // $320
+    supply: 10000,  // 10,000 tokens
+    monthlyRent: ethers.parseUnits("15000", 6), // $15,000/month
   },
   {
-    tokenId: 2,
     name: "San Francisco Modern Townhouse",
-    tokenURI: "ipfs://bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau",
-    address: "789 Valencia Street, San Francisco, CA 94110",
-    squareFootage: 2400,
-    purchasePrice: ethers.parseUnits("3800000", 6),
-    constructionYear: 2019,
-    propertyType: "Residential",
-    beds: 3,
-    baths: 2.5
+    symbol: "SFMT",
+    value: ethers.parseUnits("3800000", 6), // $3.8M
+    tokenPrice: ethers.parseUnits("380", 6), // $380
+    supply: 10000,  // 10,000 tokens
+    monthlyRent: ethers.parseUnits("18000", 6), // $18,000/month
   },
   {
-    tokenId: 3,
     name: "Chicago Downtown Penthouse",
-    tokenURI: "ipfs://bafkreihha34zb3l6f3wcfrig53h6ooyarxg7fpujediqcinzgeb4ok6f5u",
-    address: "456 Michigan Avenue, Chicago, IL 60611",
-    squareFootage: 3500,
-    purchasePrice: ethers.parseUnits("4200000", 6),
-    constructionYear: 2017,
-    propertyType: "Residential",
-    beds: 5,
-    baths: 4
+    symbol: "CDP",
+    value: ethers.parseUnits("4200000", 6), // $4.2M
+    tokenPrice: ethers.parseUnits("420", 6), // $420
+    supply: 10000,  // 10,000 tokens
+    monthlyRent: ethers.parseUnits("20000", 6), // $20,000/month
   }
 ];
 
-// Define listing details (2 per property)
+// Listing details for each property
 const listings = [
-  // Property 0 listings
-  {
-    propertyIndex: 0,
-    amount: ethers.parseUnits("500", 18),
-    pricePerToken: ethers.parseUnits("0.002", "ether")
+  { 
+    property: "Miami Beachfront Villa",
+    tokenAmount: 50, // 50 tokens
+    pricePerToken: ethers.parseUnits("255", 6), // $255 per token (2% premium)
   },
-  {
-    propertyIndex: 0,
-    amount: ethers.parseUnits("1000", 18),
-    pricePerToken: ethers.parseUnits("0.0018", "ether")
+  { 
+    property: "Manhattan Luxury Condo",
+    tokenAmount: 75, // 75 tokens
+    pricePerToken: ethers.parseUnits("330", 6), // $330 per token (3% premium)
   },
-  // Property 1 listings
-  {
-    propertyIndex: 1,
-    amount: ethers.parseUnits("750", 18),
-    pricePerToken: ethers.parseUnits("0.0025", "ether")
+  { 
+    property: "San Francisco Modern Townhouse",
+    tokenAmount: 100, // 100 tokens
+    pricePerToken: ethers.parseUnits("390", 6), // $390 per token (2.6% premium)
   },
-  {
-    propertyIndex: 1,
-    amount: ethers.parseUnits("1250", 18),
-    pricePerToken: ethers.parseUnits("0.0022", "ether")
-  },
-  // Property 2 listings
-  {
-    propertyIndex: 2,
-    amount: ethers.parseUnits("600", 18),
-    pricePerToken: ethers.parseUnits("0.0028", "ether")
-  },
-  {
-    propertyIndex: 2,
-    amount: ethers.parseUnits("900", 18),
-    pricePerToken: ethers.parseUnits("0.0026", "ether")
-  },
-  // Property 3 listings
-  {
-    propertyIndex: 3,
-    amount: ethers.parseUnits("800", 18),
-    pricePerToken: ethers.parseUnits("0.003", "ether")
-  },
-  {
-    propertyIndex: 3,
-    amount: ethers.parseUnits("1100", 18),
-    pricePerToken: ethers.parseUnits("0.0027", "ether")
+  { 
+    property: "Chicago Downtown Penthouse",
+    tokenAmount: 120, // 120 tokens
+    pricePerToken: ethers.parseUnits("440", 6), // $440 per token (4.8% premium)
   }
 ];
 
 async function main() {
-  const ownerPrivateKey = process.env.PRIVATE_KEY;
-  const testUserPrivateKey = process.env.TEST_USER_PRIVATE_KEY;
-
-  if (!ownerPrivateKey || !testUserPrivateKey) {
-    throw new Error("Missing PRIVATE_KEY or TEST_USER_PRIVATE_KEY in .env file");
-  }
-
-  const provider = ethers.provider;
-
-  const owner = new ethers.Wallet(ownerPrivateKey, provider);
-  const testUser = new ethers.Wallet(testUserPrivateKey, provider);
-
-  console.log(`Using Owner: ${owner.address}`);
-  console.log(`Using Test User: ${testUser.address}`);
-
-  // --- Get Contract Instances with Type Casting ---
-  console.log("\nGetting contract instances...");
-  // Cast the result of getContractAt to the specific TypeChain type
-  const propertyToken = await ethers.getContractAt(
-    "PropertyToken", // Use contract name directly with TypeChain
-    addresses.propertyToken,
-    owner
-  ) as PropertyToken; // Cast
-  const propertyNFT = await ethers.getContractAt("PropertyNFT", addresses.propertyNFT, owner) as PropertyNFT; // Cast
-  const propertyRegistry = await ethers.getContractAt("PropertyRegistry", addresses.propertyRegistry, owner) as PropertyRegistry; // Cast
-  const rentDistribution = await ethers.getContractAt("RentDistribution", addresses.rentDistribution, owner) as RentDistribution; // Cast
-  const propertyMarketplace = await ethers.getContractAt("PropertyMarketplace", addresses.propertyMarketplace, owner) as PropertyMarketplace; // Cast
-  const propertyDAO = await ethers.getContractAt("PropertyDAO", addresses.propertyDAO, owner) as PropertyDAO; // Cast
-  console.log("Contracts retrieved.");
-
-  // === 1. Reset state: Check existing tokens and delete if possible ===
-  console.log("\n=== Step 1: Checking and Resetting State ===");
-  
-  // Check existing listings and deactivate them
   try {
-    const activeListings = await propertyMarketplace.getActiveListings();
-    console.log(`Found ${activeListings.length} existing listings.`);
+    // Get signers - on testnet we only have the deployer
+    const [deployer] = await ethers.getSigners();
+    console.log("Using deployer address:", deployer.address);
     
-    for (let i = 0; i < activeListings.length; i++) {
-      const listingId = activeListings[i];
-      await propertyMarketplace.cancelListing(listingId);
-      console.log(`Deactivated listing ${listingId}.`);
+    // Check if addresses are configured
+    if (!deployedAddresses.propertyTokenFactory || !deployedAddresses.propertyNFT ||
+        !deployedAddresses.propertyRegistry || !deployedAddresses.rentDistribution || 
+        !deployedAddresses.propertyMarketplace) {
+      throw new Error("Contract addresses not properly configured in .env");
     }
-  } catch (error) {
-    console.log("Error checking listings. Continuing with reset...");
-  }
 
-  // === 2. Register Properties ===
-  console.log("\n=== Step 2: Registering Properties ===");
-
-  // Register each property
-  for (const property of properties) {
-    console.log(`\nProcessing property: ${property.name}`);
+    // Connect to deployed contracts
+    console.log("\nConnecting to deployed contracts...");
     
-    // Check if token ID already exists
-    try {
-      await propertyNFT.ownerOf(property.tokenId);
-      console.log(`NFT ID ${property.tokenId} already exists. Checking URI...`);
-      
-      const currentURI = await propertyNFT.tokenURI(property.tokenId);
-      if (currentURI !== property.tokenURI) {
-        console.log(`Current URI ('${currentURI}') differs. Updating to '${property.tokenURI}'...`);
-        const updateTx = await propertyNFT.updateTokenURI(property.tokenId, property.tokenURI);
-        await updateTx.wait();
-        console.log(`NFT ID ${property.tokenId} URI updated.`);
-      } else {
-        console.log(`NFT ID ${property.tokenId} URI is already correct.`);
-      }
-      
-      // Update property details
-      console.log(`Updating property details for NFT ID ${property.tokenId}...`);
-      const updateDetailsTx = await propertyNFT.updatePropertyDetails(
-        property.tokenId,
-        property.address,
-        property.squareFootage,
-        property.purchasePrice,
-        property.constructionYear,
-        property.propertyType
-      );
-      await updateDetailsTx.wait();
-      console.log(`Property details updated for NFT ID ${property.tokenId}.`);
-      
-    } catch (error) {
-      // If ownerOf fails, the token likely doesn't exist yet
-      console.log(`Minting new Property NFT (Token ID ${property.tokenId})...`);
-      const mintTx = await propertyNFT.mintProperty(
-        owner.address,
-        property.tokenURI,
-        property.address,
-        property.squareFootage,
-        property.purchasePrice,
-        property.constructionYear,
-        property.propertyType,
-        addresses.propertyToken
-      );
-      await mintTx.wait();
-      console.log(`NFT ID ${property.tokenId} minted.`);
-    }
-  }
-
-  // --- Register NFT/Token Contract Pair (Owner) ---
-  console.log(`\nChecking registration status for PropertyNFT contract (${addresses.propertyNFT})...`);
-  const existingIndex = await propertyRegistry.propertyIndex(addresses.propertyNFT);
-
-  // Note: propertyIndex returns 0 if not found, or length+1 if found.
-  if (existingIndex === 0n) {
-    console.log(`PropertyNFT contract (${addresses.propertyNFT}) not yet registered. Attempting registration...`);
-    const tx3 = await propertyRegistry.registerProperty(addresses.propertyNFT, addresses.propertyToken);
-    await tx3.wait();
-    console.log(`Contracts registered successfully in PropertyRegistry.`);
-  } else {
-    console.log(`PropertyNFT contract (${addresses.propertyNFT}) already registered in PropertyRegistry at index ${existingIndex}.`);
-  }
-
-  // === 3. Reset state: Check existing tokens and delete if possible ===
-  console.log("\n=== Step 3: Resetting Token Distribution ===");
-  
-  const maxSupply = await propertyToken.totalTokenSupply();
-  console.log(`Total token supply: ${ethers.formatUnits(maxSupply, 18)}`);
-  
-  // Check owner and test user balances
-  const ownerBalance = await propertyToken.balanceOf(owner.address);
-  const testUserBalance = await propertyToken.balanceOf(testUser.address);
-  
-  console.log(`Owner balance: ${ethers.formatUnits(ownerBalance, 18)}`);
-  console.log(`Test User balance: ${ethers.formatUnits(testUserBalance, 18)}`);
-  
-  // Transfer tokens to owner first if test user has them
-  if (testUserBalance > 0n) {
-    console.log(`Transferring ${ethers.formatUnits(testUserBalance, 18)} tokens from Test User to Owner...`);
-    try {
-      const transferTx = await propertyToken.connect(testUser).transfer(owner.address, testUserBalance);
-      await transferTx.wait();
-      console.log(`Tokens transferred from Test User to Owner.`);
-    } catch (error) {
-      console.error(`Failed to transfer tokens from Test User to Owner:`, error);
-    }
-  }
-  
-  // Distribute tokens: 60% to owner, 40% to test user
-  const ownerAmount = maxSupply * 60n / 100n;
-  const testUserAmount = maxSupply - ownerAmount;
-  
-  // First ensure owner has all tokens
-  const updatedOwnerBalance = await propertyToken.balanceOf(owner.address);
-  if (updatedOwnerBalance < maxSupply) {
-    const mintAmount = maxSupply - updatedOwnerBalance;
-    console.log(`Minting ${ethers.formatUnits(mintAmount, 18)} tokens to Owner...`);
-    const mintTx = await propertyToken.connect(owner).mint(owner.address, mintAmount);
-    await mintTx.wait();
-  }
-  
-  // Transfer 40% to test user
-  console.log(`Transferring ${ethers.formatUnits(testUserAmount, 18)} tokens to Test User...`);
-  const transferTx = await propertyToken.connect(owner).transfer(testUser.address, testUserAmount);
-  await transferTx.wait();
-  console.log(`Tokens transferred to Test User.`);
-
-  // === 4. Create Listings ===
-  console.log("\n=== Step 4: Creating Listings ===");
-  
-  // Create 2 listings for each property
-  for (const listing of listings) {
-    console.log(`\nCreating listing for Property ${listing.propertyIndex}: ${ethers.formatUnits(listing.amount, 18)} tokens at ${ethers.formatEther(listing.pricePerToken)} ETH each...`);
-    
-    // Determine which user creates the listing (alternate between owner and test user)
-    const isOwnerListing = listings.indexOf(listing) % 2 === 0;
-    const user = isOwnerListing ? owner : testUser;
-    console.log(`Listing creator: ${isOwnerListing ? 'Owner' : 'Test User'}`);
-    
-    // Check and approve marketplace allowance
-    const userAllowance = await propertyToken.allowance(user.address, addresses.propertyMarketplace);
-    if (userAllowance < listing.amount) {
-      console.log(`Approving marketplace for ${ethers.formatUnits(listing.amount, 18)} tokens...`);
-      const approveTx = await propertyToken.connect(user).approve(addresses.propertyMarketplace, listing.amount);
-      await approveTx.wait();
-      console.log(`Marketplace approved.`);
-    } else {
-      console.log(`Marketplace already has sufficient allowance.`);
-    }
-    
-    // Create listing
-    try {
-      const createTx = await propertyMarketplace.connect(user).createListing(
-        addresses.propertyToken,
-        listing.amount,
-        listing.pricePerToken
-      );
-      const receipt = await createTx.wait();
-      
-      // Extract listing ID from event
-      const listingCreatedEvent = receipt?.logs.find(
-        (log: any) => {
-          try {
-            const parsedLog = propertyMarketplace.interface.parseLog(log);
-            return parsedLog?.name === "ListingCreated";
-          } catch { return false; }
-        }
-      );
-      
-      if (listingCreatedEvent) {
-        const parsed = propertyMarketplace.interface.parseLog(listingCreatedEvent as any);
-        const listingId = parsed?.args.listingId;
-        console.log(`Listing created with ID: ${listingId}`);
-      } else {
-        console.log(`Listing created, but couldn't determine ID.`);
-      }
-    } catch (error: any) {
-      console.error(`Failed to create listing: ${error.message}`);
-    }
-  }
-
-  // === 5. Deposit Rent ===
-  console.log("\n=== Step 5: Depositing Rent ===");
-  const rentAmountWei = ethers.parseEther("0.05"); // 0.05 ETH as rent
-
-  console.log(`Owner depositing ${ethers.formatEther(rentAmountWei)} ETH as rent for PropertyToken ${addresses.propertyToken}...`);
-  try {
-    const tx = await rentDistribution.connect(owner).depositRent(
-      addresses.propertyToken,
-      { value: rentAmountWei }
+    const propertyTokenFactory = await ethers.getContractAt(
+      "PropertyTokenFactory",
+      deployedAddresses.propertyTokenFactory
     );
-    await tx.wait();
-    console.log("Rent deposited successfully.");
-  } catch (error: any) {
-    console.error(`Failed to deposit rent: ${error.message}`);
-  }
-
-  // === 6. Create DAO Proposals ===
-  console.log("\n=== Step 6: Creating DAO Proposals ===");
-  
-  const proposals = [
-    {
-      title: "Community Pool Renovation",
-      description: "Proposal to renovate the community pool with new tiling and equipment",
-      creator: owner
-    },
-    {
-      title: "Increase Security Budget",
-      description: "Proposal to increase the monthly security budget by 20%",
-      creator: testUser
-    },
-    {
-      title: "Landscaping Improvements",
-      description: "Proposal for quarterly landscaping improvements in common areas",
-      creator: owner
+    
+    const propertyNFT = await ethers.getContractAt(
+      "PropertyNFT",
+      deployedAddresses.propertyNFT
+    ) as PropertyNFT;
+    
+    const propertyRegistry = await ethers.getContractAt(
+      "PropertyRegistry",
+      deployedAddresses.propertyRegistry
+    ) as PropertyRegistry;
+    
+    const rentDistribution = await ethers.getContractAt(
+      "RentDistribution",
+      deployedAddresses.rentDistribution
+    ) as RentDistribution;
+    
+    const propertyMarketplace = await ethers.getContractAt(
+      "PropertyMarketplace",
+      deployedAddresses.propertyMarketplace
+    ) as PropertyMarketplace;
+    
+    // Connect to PropertyDAO (only if address exists)
+    let propertyDAO;
+    if (deployedAddresses.propertyDAO) {
+      propertyDAO = await ethers.getContractAt(
+        "PropertyDAO",
+        deployedAddresses.propertyDAO
+      ) as PropertyDAO;
+      console.log("Connected to PropertyDAO");
     }
-  ];
-  
-  for (const proposal of proposals) {
-    console.log(`Creating proposal: ${proposal.title}...`);
-    try {
-      const tx = await propertyDAO.connect(proposal.creator).createProposal(
-        `${proposal.title}: ${proposal.description}`, 
-        ethers.ZeroAddress, 
-        "0x"
-      );
-      await tx.wait();
-      console.log(`Proposal "${proposal.title}" created.`);
-    } catch (error: any) {
-      console.error(`Failed to create proposal "${proposal.title}": ${error.message}`);
-    }
-  }
 
-  console.log("\n=== State Population Complete ===");
-  console.log("\nSummary:");
-  console.log(`- ${properties.length} properties registered with complete metadata`);
-  console.log(`- ${listings.length} listings created (${listings.length / properties.length} per property)`);
-  console.log(`- ${ethers.formatEther(rentAmountWei)} ETH rent deposited`);
-  console.log(`- ${proposals.length} DAO proposals created`);
+    // Connect to PropertyToken contracts
+    const propertyTokens: { [key: string]: PropertyToken } = {};
+    for (const prop of properties) {
+      const tokenAddress = deployedAddresses.propertyTokens[prop.name];
+      if (tokenAddress) {
+        propertyTokens[prop.name] = await ethers.getContractAt("PropertyToken", tokenAddress) as PropertyToken;
+        console.log(`Connected to ${prop.name} token at ${tokenAddress}`);
+      } else {
+        console.warn(`No address found for ${prop.name} token, skipping`);
+      }
+    }
+
+    // Mint NFTs for each property
+    console.log("\nMinting property NFTs...");
+    let mintedNFTCount = 0;
+    for (const prop of properties) {
+      try {
+        const tokenAddress = deployedAddresses.propertyTokens[prop.name];
+        if (!tokenAddress) {
+          console.warn(`No token address found for ${prop.name}, skipping NFT minting`);
+          continue;
+        }
+
+        // First check if the NFT actually exists in the PropertyNFT contract
+        const tokenId = mintedNFTCount;
+        let nftExists = false;
+        
+        try {
+          // Try to call ownerOf to check if the NFT exists
+          const owner = await propertyNFT.ownerOf(tokenId);
+          console.log(`NFT for ${prop.name} already exists with tokenId ${tokenId} owned by ${owner}`);
+          nftExists = true;
+        } catch (error) {
+          console.log(`NFT with tokenId ${tokenId} doesn't exist yet, will mint it`);
+        }
+        
+        // If NFT exists, check if it's registered in the PropertyRegistry
+        // If not, register it
+        if (nftExists) {
+          try {
+            const registeredTokenAddress = await propertyRegistry.getPropertyToken(deployedAddresses.propertyNFT, tokenId);
+            if (registeredTokenAddress.toLowerCase() !== tokenAddress.toLowerCase()) {
+              console.log(`Updating registry for tokenId ${tokenId} to point to ${tokenAddress}`);
+              await (propertyRegistry as any).registerProperty(deployedAddresses.propertyNFT, tokenId, tokenAddress);
+            }
+          } catch (error) {
+            console.log(`NFT exists but not registered, registering tokenId ${tokenId} with address ${tokenAddress}`);
+            await (propertyRegistry as any).registerProperty(deployedAddresses.propertyNFT, tokenId, tokenAddress);
+          }
+          
+          mintedNFTCount++;
+          continue;
+        }
+
+        // Format property location and details
+        const propertyLocation = `${prop.name} Location`;
+        const squareFootage = 2000 + (mintedNFTCount * 500); // Varying square footage
+        const purchasePrice = prop.value; // Using the property value as purchase price
+        const constructionYear = 2020 - (mintedNFTCount * 5); // Varying construction years
+        const propertyType = "Residential";
+        
+        // Use the real IPFS CIDs for each property
+        let ipfsCID = "";
+        if (prop.name === "Miami Beachfront Villa") {
+          ipfsCID = "bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau";
+        } else if (prop.name === "Manhattan Luxury Condo") {
+          ipfsCID = "bafkreighvyg3j4ajbssvszw4kzdsovo6sbycfm3cbn6pfw6uqa2qbgmamy";
+        } else if (prop.name === "San Francisco Modern Townhouse") {
+          ipfsCID = "bafkreifzkvccvttmnzhpcmmuz6vwpdsqjz4fcvjwa4milc2mqmojo45roa";
+        } else if (prop.name === "Chicago Downtown Penthouse") {
+          ipfsCID = "bafkreihha34zb3l6f3wcfrig53h6ooyarxg7fpujediqcinzgeb4ok6f5u";
+        }
+        const metadataURI = `ipfs://${ipfsCID}`;
+        
+        // Mint the NFT
+        console.log(`Minting NFT for ${prop.name} with tokenId ${tokenId} and metadata ${metadataURI}`);
+        const mintTx = await propertyNFT.mintProperty(
+          deployer.address,
+          metadataURI,
+          propertyLocation,
+          squareFootage,
+          purchasePrice,
+          constructionYear,
+          propertyType,
+          tokenAddress
+        );
+        
+        await mintTx.wait();
+        console.log(`Minted NFT for ${prop.name} with tokenId ${tokenId}`);
+        
+        // Register the NFT in the PropertyRegistry if not already registered
+        try {
+          const registeredTokenAddress = await propertyRegistry.getPropertyToken(deployedAddresses.propertyNFT, tokenId);
+          if (registeredTokenAddress.toLowerCase() !== tokenAddress.toLowerCase()) {
+            console.log(`Updating registry for tokenId ${tokenId} to point to ${tokenAddress}`);
+            await (propertyRegistry as any).registerProperty(deployedAddresses.propertyNFT, tokenId, tokenAddress);
+          } else {
+            console.log(`Property already registered correctly in registry for tokenId ${tokenId}`);
+          }
+        } catch (error) {
+          console.log(`Registering tokenId ${tokenId} with token address ${tokenAddress}`);
+          await (propertyRegistry as any).registerProperty(deployedAddresses.propertyNFT, tokenId, tokenAddress);
+        }
+        
+        mintedNFTCount++;
+      } catch (error: any) {
+        console.warn(`Error processing ${prop.name}: ${error.message}`);
+      }
+    }
+
+    // After all properties are processed, update NFT metadata with IPFS CIDs
+    console.log("\n--- Updating NFT metadata with IPFS CIDs ---");
+    
+    // Define CIDs for each property
+    const propertyCIDs: Record<string, string> = {
+      "Miami Beachfront Villa": "bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau",
+      "Manhattan Luxury Condo": "bafkreighvyg3j4ajbssvszw4kzdsovo6sbycfm3cbn6pfw6uqa2qbgmamy",
+      "San Francisco Modern Townhouse": "bafkreifzkvccvttmnzhpcmmuz6vwpdsqjz4fcvjwa4milc2mqmojo45roa",
+      "Chicago Downtown Penthouse": "bafkreihha34zb3l6f3wcfrig53h6ooyarxg7fpujediqcinzgeb4ok6f5u"
+    };
+    
+    // Loop through properties and update their token URIs
+    for (let i = 0; i < properties.length; i++) {
+      const prop = properties[i];
+      const tokenId = i; // Assuming tokenIds match the property index
+      const ipfsCID = propertyCIDs[prop.name];
+      
+      if (!ipfsCID) {
+        console.error(`❌ No CID found for property ${prop.name}`);
+        continue;
+      }
+      
+      const metadataURI = `ipfs://${ipfsCID}`;
+      
+      try {
+        console.log(`Updating metadata for ${prop.name} (tokenId: ${tokenId}) to ${metadataURI}`);
+        const tx = await propertyNFT.updateTokenURI(tokenId, metadataURI);
+        await tx.wait();
+        console.log(`✅ Metadata updated successfully for ${prop.name}`);
+      } catch (error: any) {
+        console.error(`❌ Error updating metadata for ${prop.name}:`, error.message || String(error));
+      }
+    }
+
+    // Mint tokens to deployer first
+    console.log("\nMinting tokens to deployer account...");
+    for (const [propertyName, propertyToken] of Object.entries(propertyTokens)) {
+      try {
+        // Check if deployer already has tokens
+        const deployerBalance = await propertyToken.balanceOf(deployer.address);
+        if (deployerBalance == 0n) {
+          // Token owner should be the deployer, so they should be able to mint
+          const mintAmount = ethers.parseUnits("10000", 18); // Mint the total supply
+          await propertyToken.mint(deployer.address, mintAmount);
+          console.log(`Minted ${ethers.formatUnits(mintAmount, 18)} ${propertyName} tokens to deployer`);
+        } else {
+          console.log(`Deployer already has ${ethers.formatUnits(deployerBalance, 18)} ${propertyName} tokens`);
+        }
+      } catch (error: any) {
+        console.warn(`Error minting ${propertyName} tokens: ${error.message}`);
+      }
+    }
+
+    // Since we're on a testnet, we'll use only the deployer account
+    console.log("\nDistributing property tokens to addresses...");
+    let distributedTokenCount = 0;
+    
+    // Create some hardcoded test addresses to transfer tokens to
+    const testAddresses = [
+      "0xa83126A279960797233d48488e5908d6C1E72f2F", // User's first address
+      "0xcd64902df08575Df5F3499CdA6F14154fB48E362"  // User's second address
+    ];
+    
+    for (const [propertyName, propertyToken] of Object.entries(propertyTokens)) {
+      // Distribute tokens to test addresses
+      for (const testAddress of testAddresses) {
+        try {
+          // Transfer 200 tokens to each test address for each property
+          const tokenAmount = ethers.parseUnits("200", 18);
+          
+          // Check balance of deployer to make sure they have enough tokens
+          const deployerBalance = await propertyToken.balanceOf(deployer.address);
+          console.log(`Deployer balance of ${propertyName}: ${ethers.formatUnits(deployerBalance, 18)}`);
+          
+          if (deployerBalance >= tokenAmount) {
+            await propertyToken.transfer(testAddress, tokenAmount);
+            distributedTokenCount++;
+            console.log(`Transferred 200 ${propertyName} tokens to ${testAddress}`);
+          } else {
+            console.warn(`Deployer doesn't have enough ${propertyName} tokens to transfer`);
+          }
+        } catch (error: any) {
+          console.warn(`Error transferring ${propertyName} tokens: ${error.message}`);
+        }
+      }
+    }
+    
+    // Step 2: Create listings with deployer account
+    console.log("\nCreating listings on marketplace...");
+    let createdListingsCount = 0;
+    
+    for (const listing of listings) {
+      try {
+        // Get the property token address
+        const tokenAddress = deployedAddresses.propertyTokens[listing.property];
+        if (!tokenAddress) {
+          console.warn(`No token address found for ${listing.property}, skipping listing`);
+          continue;
+        }
+        
+        // Deployer creates a listing for each property
+        const propertyToken = await ethers.getContractAt("PropertyToken", tokenAddress) as PropertyToken;
+        
+        // Approve marketplace to transfer tokens
+        const tokenAmount = ethers.parseUnits(listing.tokenAmount.toString(), 18);
+        
+        // Check balance to ensure deployer has enough tokens
+        const deployerBalance = await propertyToken.balanceOf(deployer.address);
+        if (deployerBalance < tokenAmount) {
+          console.warn(`Deployer doesn't have enough ${listing.property} tokens to create listing`);
+          continue;
+        }
+        
+        await propertyToken.approve(deployedAddresses.propertyMarketplace, tokenAmount);
+        
+        // Create listing
+        const tx = await propertyMarketplace.createListing(
+          tokenAddress,
+          tokenAmount,
+          listing.pricePerToken
+        );
+        await tx.wait();
+        createdListingsCount++;
+        console.log(`Created listing for ${listing.tokenAmount} ${listing.property} tokens at ${ethers.formatUnits(listing.pricePerToken, 6)} USDC per token`);
+      } catch (error: any) {
+        console.warn(`Error creating listing for ${listing.property}: ${error.message}`);
+      }
+    }
+    
+    // Step 3: Deposit rent for properties
+    console.log("\nDepositing rent for properties...");
+    let rentDepositsCount = 0;
+    
+    for (const property of properties) {
+      try {
+        // Get the property token address
+        const tokenAddress = deployedAddresses.propertyTokens[property.name];
+        if (!tokenAddress) {
+          console.warn(`No token address found for ${property.name}, skipping rent deposit`);
+          continue;
+        }
+        
+        // Deployer deposits 3 months of rent for the property
+        const threeMonthsRent = property.monthlyRent * BigInt(3);
+        await rentDistribution.depositRent(tokenAddress, { value: threeMonthsRent });
+        rentDepositsCount++;
+        console.log(`Deposited 3 months of rent (${ethers.formatUnits(threeMonthsRent, 6)} USDC) for ${property.name}`);
+      } catch (error: any) {
+        console.warn(`Error depositing rent for ${property.name}: ${error.message}`);
+      }
+    }
+    
+    // Step 4: Create DAO proposals (only if DAO is deployed)
+    let createdProposalsCount = 0;
+    if (propertyDAO) {
+      console.log("\nCreating DAO proposals...");
+      
+      // Deployer creates a proposal
+      const firstPropertyName = Object.keys(propertyTokens)[0];
+      const firstPropertyToken = propertyTokens[firstPropertyName];
+      
+      if (firstPropertyToken) {
+        try {
+          // Check deployer's balance
+          const deployerBalance = await firstPropertyToken.balanceOf(deployer.address);
+          console.log(`Deployer's ${firstPropertyName} token balance: ${ethers.formatUnits(deployerBalance, 18)}`);
+          
+          // Create a proposal
+          const proposalDescription = `Increase monthly rent for ${firstPropertyName} by 5%`;
+          
+          // Mock function call data for the proposal
+          const mockCalldata = "0x";
+          const mockTarget = deployedAddresses.rentDistribution;
+          
+          // Try to create a proposal
+          await propertyDAO.createProposal(
+            proposalDescription,
+            mockTarget,
+            mockCalldata
+          );
+          
+          createdProposalsCount++;
+          console.log(`Created proposal: "${proposalDescription}"`);
+        } catch (error: any) {
+          console.warn(`Error creating proposal: ${error.message}`);
+        }
+      }
+    }
+    
+    // Summary
+    console.log("\n--- Populate State Summary ---");
+    console.log(`Properties with tokens distributed: ${distributedTokenCount}`);
+    console.log(`Listings created: ${createdListingsCount}`);
+    console.log(`Rent deposits made: ${rentDepositsCount}`);
+    console.log(`DAO proposals created: ${createdProposalsCount}`);
+    console.log("-----------------------------");
+    
+  } catch (error) {
+    console.error("Error in populateState script:", error);
+  }
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error("Script failed:", error);
+    console.error(error);
     process.exit(1);
   });

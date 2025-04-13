@@ -1,5 +1,7 @@
 // scripts/deployAll.ts
 import { ethers } from "hardhat";
+import { AddressLike } from "ethers";
+import { PropertyRegistry } from "../typechain-types";
 
 async function main() {
   const [deployer] = await ethers.getSigners();
@@ -7,23 +9,15 @@ async function main() {
 
   const initialOwner = deployer.address; // Use deployer as initial owner
 
-  // 1. Deploy PropertyToken (No dependencies)
-  console.log("\nDeploying PropertyToken...");
-  const propertyTokenValue = ethers.parseUnits("1000000", 6); // Example: $1M valuation (using 6 decimals like USDC)
-  const propertyTokenSupply = ethers.parseUnits("10000", 18); // Example: 10,000 tokens (standard 18 decimals)
-  const PropertyTokenFactory = await ethers.getContractFactory("PropertyToken");
-  const propertyToken = await PropertyTokenFactory.deploy(
-    "BrickBase Property Example", // Name
-    "BPE",                      // Symbol
-    propertyTokenValue,
-    propertyTokenSupply,
-    initialOwner
-  );
-  await propertyToken.waitForDeployment();
-  const propertyTokenAddress = await propertyToken.getAddress();
-  console.log(`PropertyToken deployed to: ${propertyTokenAddress}`);
+  // 1. Deploy PropertyTokenFactory first
+  console.log("\nDeploying PropertyTokenFactory...");
+  const PropertyTokenFactoryFactory = await ethers.getContractFactory("PropertyTokenFactory");
+  const propertyTokenFactory = await PropertyTokenFactoryFactory.deploy(initialOwner);
+  await propertyTokenFactory.waitForDeployment();
+  const propertyTokenFactoryAddress = await propertyTokenFactory.getAddress();
+  console.log(`PropertyTokenFactory deployed to: ${propertyTokenFactoryAddress}`);
 
-  // 2. Deploy PropertyNFT (Needs PropertyToken address in minting, but not constructor)
+  // 2. Deploy PropertyNFT
   console.log("\nDeploying PropertyNFT...");
   const PropertyNFTFactory = await ethers.getContractFactory("PropertyNFT");
   const propertyNFT = await PropertyNFTFactory.deploy(initialOwner);
@@ -31,12 +25,7 @@ async function main() {
   const propertyNFTAddress = await propertyNFT.getAddress();
   console.log(`PropertyNFT deployed to: ${propertyNFTAddress}`);
 
-  console.log("Setting PropertyNFT address in PropertyToken...");
-  // Ensure deployer is the owner of propertyToken before calling
-  await propertyToken.connect(deployer).setPropertyNFT(propertyNFTAddress);
-  console.log("PropertyNFT address set.");
-
-  // 3. Deploy PropertyRegistry (No runtime dependencies)
+  // 3. Deploy PropertyRegistry
   console.log("\nDeploying PropertyRegistry...");
   const PropertyRegistryFactory = await ethers.getContractFactory("PropertyRegistry");
   const propertyRegistry = await PropertyRegistryFactory.deploy(initialOwner);
@@ -44,7 +33,7 @@ async function main() {
   const propertyRegistryAddress = await propertyRegistry.getAddress();
   console.log(`PropertyRegistry deployed to: ${propertyRegistryAddress}`);
 
-  // 4. Deploy RentDistribution (No runtime dependencies)
+  // 4. Deploy RentDistribution
   console.log("\nDeploying RentDistribution...");
   const RentDistributionFactory = await ethers.getContractFactory("RentDistribution");
   const rentDistribution = await RentDistributionFactory.deploy(initialOwner);
@@ -52,7 +41,7 @@ async function main() {
   const rentDistributionAddress = await rentDistribution.getAddress();
   console.log(`RentDistribution deployed to: ${rentDistributionAddress}`);
 
-  // 5. Deploy PropertyMarketplace (Needs fee recipient)
+  // 5. Deploy PropertyMarketplace
   console.log("\nDeploying PropertyMarketplace...");
   const platformFeePercentage = 100; // 1% (100 basis points)
   const feeRecipient = initialOwner; // Platform fees go to deployer initially
@@ -66,14 +55,104 @@ async function main() {
   const propertyMarketplaceAddress = await propertyMarketplace.getAddress();
   console.log(`PropertyMarketplace deployed to: ${propertyMarketplaceAddress}`);
 
-  // 6. Deploy PropertyDAO (Needs PropertyToken address)
+  // 6. Create individual PropertyTokens for 4 properties
+  console.log("\nCreating individual PropertyTokens for properties...");
+  
+  const properties = [
+    {
+      name: "Miami Beachfront Villa",
+      symbol: "MBV",
+      value: ethers.parseUnits("2500000", 6), // $2.5M
+      supply: ethers.parseUnits("10000", 18)  // 10,000 tokens
+    },
+    {
+      name: "Manhattan Luxury Condo",
+      symbol: "MLC",
+      value: ethers.parseUnits("3200000", 6), // $3.2M
+      supply: ethers.parseUnits("10000", 18)  // 10,000 tokens
+    },
+    {
+      name: "San Francisco Modern Townhouse",
+      symbol: "SFMT",
+      value: ethers.parseUnits("3800000", 6), // $3.8M
+      supply: ethers.parseUnits("10000", 18)  // 10,000 tokens
+    },
+    {
+      name: "Chicago Downtown Penthouse",
+      symbol: "CDP",
+      value: ethers.parseUnits("4200000", 6), // $4.2M
+      supply: ethers.parseUnits("10000", 18)  // 10,000 tokens
+    }
+  ];
+
+  const propertyTokenAddresses: string[] = [];
+  
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i];
+    console.log(`Creating token for ${property.name}...`);
+    
+    // We need to cast propertyTokenFactory to any to access the custom method
+    const tx = await (propertyTokenFactory as any).createPropertyToken(
+      property.name,
+      property.symbol,
+      property.value,
+      property.supply
+    );
+    
+    const receipt = await tx.wait();
+    // Filter for the PropertyTokenCreated event to get the token address
+    const event = receipt.logs.find(
+      (log: any) => {
+        try {
+          const parsedLog = propertyTokenFactory.interface.parseLog(log);
+          return parsedLog?.name === "PropertyTokenCreated";
+        } catch { return false; }
+      }
+    );
+    
+    let tokenAddress: string;
+    if (event) {
+      const parsed = propertyTokenFactory.interface.parseLog(event as any);
+      if (parsed) {
+        tokenAddress = parsed.args.tokenAddress as string;
+        console.log(`Property token for ${property.name} created at: ${tokenAddress}`);
+      } else {
+        console.error(`Failed to parse event for ${property.name}`);
+        continue;
+      }
+    } else {
+      console.error(`Failed to get token address for ${property.name}`);
+      continue;
+    }
+    
+    propertyTokenAddresses.push(tokenAddress);
+    
+    // Register in PropertyRegistry
+    console.log(`Registering property ${i} in registry...`);
+    
+    // Use direct function access to call the 3-parameter version
+    const registerTx = await propertyRegistry["registerProperty(address,uint256,address)"](
+      propertyNFTAddress,
+      BigInt(i), // Use index as tokenId to make each registration unique
+      tokenAddress
+    );
+    
+    await registerTx.wait();
+    console.log(`Property ${i} registered in registry.`);
+  }
+
+  // 7. Deploy PropertyDAO with the first property token
   console.log("\nDeploying PropertyDAO...");
   const proposalThreshold = 500; // 5%
   const votingPeriod = 60 * 60 * 24 * 3; // 3 days (in seconds)
   const executionDelay = 60 * 60 * 24 * 1; // 1 day (in seconds)
+  
+  // Use the first property token for DAO governance
+  const firstPropertyToken = propertyTokenAddresses[0];
+  
   const PropertyDAOFactory = await ethers.getContractFactory("PropertyDAO");
   const propertyDAO = await PropertyDAOFactory.deploy(
-    propertyTokenAddress,
+    firstPropertyToken,
     proposalThreshold,
     votingPeriod,
     executionDelay,
@@ -84,12 +163,16 @@ async function main() {
   console.log(`PropertyDAO deployed to: ${propertyDAOAddress}`);
 
   console.log("\n--- Deployment Summary ---");
-  console.log(`PropertyToken: ${propertyTokenAddress}`);
+  console.log(`PropertyTokenFactory: ${propertyTokenFactoryAddress}`);
   console.log(`PropertyNFT: ${propertyNFTAddress}`);
   console.log(`PropertyRegistry: ${propertyRegistryAddress}`);
   console.log(`RentDistribution: ${rentDistributionAddress}`);
   console.log(`PropertyMarketplace: ${propertyMarketplaceAddress}`);
   console.log(`PropertyDAO: ${propertyDAOAddress}`);
+  console.log("\n--- Property Tokens ---");
+  for (let i = 0; i < properties.length; i++) {
+    console.log(`${properties[i].name} (${properties[i].symbol}): ${propertyTokenAddresses[i]}`);
+  }
   console.log("-------------------------");
 }
 

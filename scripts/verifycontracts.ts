@@ -10,33 +10,43 @@ interface ContractArgs {
   [key: string]: (string | number)[];
 }
 
-// Contract addresses from populateState.ts (updated)
+// Contract addresses from the latest deployment
 const addresses: ContractAddresses = {
-  propertyToken: "0x0B00bB2B901B607c718A4584dD236C310B28f49B",
-  propertyNFT: "0x9F360f45e68f6B36b4a5863B7C6512D0E8789157",
-  propertyRegistry: "0x04E8F7eF6AC987e55953EeB59fFB14Bb753035CE",
-  rentDistribution: "0x8655e35343e0A5621577e13181da9A8F871d1985",
-  propertyMarketplace: "0xB4D1F6B65fBf3f75a2A62BCb9307c695473Bb7D1",
-  propertyDAO: "0xA08b643C8fB9466cc2Df94dA3bC69F3876794257"
+  propertyTokenFactory: "0x40e30cf089F379fcfbfaa5af508105968C66abEB",
+  propertyNFT: "0x9262a0D1cd71eb8DA5ff353dfeEd0C94EBd75E83",
+  propertyRegistry: "0xCD23507e412F22bE818dfD8A3B61542f87A950Af",
+  rentDistribution: "0x83093a257d419cdeb50917FA91df7A23eA59e71A",
+  propertyMarketplace: "0x5866533Eb5AD5dDd583c7A91F98A70A8397e61C0",
+  propertyDAO: "0xc6410148a595D41aa69Af8f602d01e206a3FF883",
+  // Property tokens
+  "MBVToken": "0x2292fb1601A7D3E504ECa31e142A2Ac67aa9b3cA",
+  "MLCToken": "0xDAfD2b191C749002FEfACE20Adb01C9772965a15",
+  "SFMTToken": "0x72fE06FBe2E47422c07586418aCF704AA82FD246",
+  "CDPToken": "0x0DF7E350030E1b4e17643A918B9D9D439e8C2eC2"
 };
 
 // Get owner address from .env
-const ownerAddress = process.env.OWNER_ADDRESS || "0xa83126A279960797233d48488e5908d6C1E72f2F"; // Replace with your owner address
+const ownerAddress = process.env.OWNER_ADDRESS || "0xa83126A279960797233d48488e5908d6C1E72f2F"; // Current deployer address
 
 // Constructor arguments - update these based on your deployment parameters
 const args: ContractArgs = {
-  propertyToken: ["BrickBase Property Example", "BPE", "1000000000000", "10000000000000000000000", ownerAddress],
+  propertyTokenFactory: [ownerAddress],
   propertyNFT: [ownerAddress],
   propertyRegistry: [ownerAddress],
   rentDistribution: [ownerAddress],
   propertyMarketplace: ["100", ownerAddress, ownerAddress], // 1% fee, owner as fee recipient
   propertyDAO: [
-    "0x0B00bB2B901B607c718A4584dD236C310B28f49B", // propertyToken address
+    "0x2292fb1601A7D3E504ECa31e142A2Ac67aa9b3cA", // Miami Beachfront Villa token address
     "500", // proposalThreshold (5%)
     "259200", // votingPeriod (3 days in seconds)
     "86400", // executionDelay (1 day in seconds)
     ownerAddress
-  ]
+  ],
+  // Property tokens
+  "MBVToken": ["Miami Beachfront Villa", "MBV", "2500000000000", "10000000000000000000000", ownerAddress],
+  "MLCToken": ["Manhattan Luxury Condo", "MLC", "3200000000000", "10000000000000000000000", ownerAddress],
+  "SFMTToken": ["San Francisco Modern Townhouse", "SFMT", "3800000000000", "10000000000000000000000", ownerAddress],
+  "CDPToken": ["Chicago Downtown Penthouse", "CDP", "4200000000000", "10000000000000000000000", ownerAddress]
 };
 
 async function main() {
