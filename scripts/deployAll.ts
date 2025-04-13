@@ -8,6 +8,11 @@ async function main() {
   console.log("Deploying contracts with the account:", deployer.address);
 
   const initialOwner = deployer.address; // Use deployer as initial owner
+  
+  // USDC token address on Base Sepolia - replace with the actual address
+  // For testnet, you can use a mock USDC token or deploy one if needed
+  const usdcTokenAddress = process.env.USDC_TOKEN_ADDRESS || "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // Mock address, replace with real one
+  console.log(`Using USDC token address: ${usdcTokenAddress}`);
 
   // 1. Deploy PropertyTokenFactory first
   console.log("\nDeploying PropertyTokenFactory...");
@@ -40,17 +45,24 @@ async function main() {
   await rentDistribution.waitForDeployment();
   const rentDistributionAddress = await rentDistribution.getAddress();
   console.log(`RentDistribution deployed to: ${rentDistributionAddress}`);
+  
+  // Set USDC token in RentDistribution using type casting to bypass TypeScript errors
+  await (rentDistribution as any).setUSDCToken(usdcTokenAddress);
+  console.log(`USDC token set in RentDistribution: ${usdcTokenAddress}`);
 
   // 5. Deploy PropertyMarketplace
   console.log("\nDeploying PropertyMarketplace...");
   const platformFeePercentage = 100; // 1% (100 basis points)
   const feeRecipient = initialOwner; // Platform fees go to deployer initially
+  
   const PropertyMarketplaceFactory = await ethers.getContractFactory("PropertyMarketplace");
   const propertyMarketplace = await PropertyMarketplaceFactory.deploy(
     platformFeePercentage,
     feeRecipient,
+    usdcTokenAddress,
     initialOwner
   );
+  
   await propertyMarketplace.waitForDeployment();
   const propertyMarketplaceAddress = await propertyMarketplace.getAddress();
   console.log(`PropertyMarketplace deployed to: ${propertyMarketplaceAddress}`);
@@ -130,8 +142,8 @@ async function main() {
     // Register in PropertyRegistry
     console.log(`Registering property ${i} in registry...`);
     
-    // Use direct function access to call the 3-parameter version
-    const registerTx = await propertyRegistry["registerProperty(address,uint256,address)"](
+    // Use direct function access with type casting for the 3-parameter version
+    const registerTx = await (propertyRegistry as any)["registerProperty(address,uint256,address)"](
       propertyNFTAddress,
       BigInt(i), // Use index as tokenId to make each registration unique
       tokenAddress

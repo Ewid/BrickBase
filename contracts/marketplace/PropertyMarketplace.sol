@@ -12,6 +12,9 @@ contract PropertyMarketplace is ReentrancyGuardUpgradeable, Ownable {
     // Platform fee recipient address
     address public feeRecipient;
     
+    // USDC token address
+    address public usdcToken;
+    
     // Listing structure
     struct Listing {
         address seller;
@@ -30,10 +33,12 @@ contract PropertyMarketplace is ReentrancyGuardUpgradeable, Ownable {
     event ListingPurchased(uint256 indexed listingId, address indexed buyer, uint256 amount, uint256 totalPrice);
     event PlatformFeeUpdated(uint256 newFeePercentage);
     event FeeRecipientUpdated(address newFeeRecipient);
+    event USDCTokenUpdated(address newUsdcToken);
     
-    constructor(uint256 _platformFeePercentage, address _feeRecipient, address initialOwner) Ownable(initialOwner) {
+    constructor(uint256 _platformFeePercentage, address _feeRecipient, address _usdcToken, address initialOwner) Ownable(initialOwner) {
         platformFeePercentage = _platformFeePercentage;
         feeRecipient = _feeRecipient;
+        usdcToken = _usdcToken;
     }
     
     // Create a new listing
@@ -72,18 +77,20 @@ contract PropertyMarketplace is ReentrancyGuardUpgradeable, Ownable {
         emit ListingCancelled(_listingId);
     }
     
-    // Purchase tokens from a listing
-    function purchaseTokens(uint256 _listingId, uint256 _amount) external payable nonReentrant {
+    // Purchase tokens from a listing using USDC
+    function purchaseTokens(uint256 _listingId, uint256 _amount) external nonReentrant {
         Listing storage listing = listings[_listingId];
         require(listing.isActive, "Listing not active");
         require(_amount > 0 && _amount <= listing.tokenAmount, "Invalid amount");
         
         uint256 totalPrice = (_amount * listing.pricePerToken) / (10**18);
-        require(msg.value >= totalPrice, "Insufficient payment");
         
         // Calculate platform fee
         uint256 platformFee = (totalPrice * platformFeePercentage) / 10000;
         uint256 sellerProceeds = totalPrice - platformFee;
+        
+        // Transfer USDC from buyer to contract
+        IERC20(usdcToken).transferFrom(msg.sender, address(this), totalPrice);
         
         // Update listing
         listing.tokenAmount -= _amount;
@@ -91,17 +98,12 @@ contract PropertyMarketplace is ReentrancyGuardUpgradeable, Ownable {
             listing.isActive = false;
         }
         
-        // Transfer tokens to buyer
+        // Transfer property tokens to buyer
         IERC20(listing.propertyToken).transfer(msg.sender, _amount);
         
-        // Transfer funds to seller and platform
-        payable(listing.seller).transfer(sellerProceeds);
-        payable(feeRecipient).transfer(platformFee);
-        
-        // Refund excess ETH to buyer if any
-        if (msg.value > totalPrice) {
-            payable(msg.sender).transfer(msg.value - totalPrice);
-        }
+        // Transfer USDC to seller and platform
+        IERC20(usdcToken).transfer(listing.seller, sellerProceeds);
+        IERC20(usdcToken).transfer(feeRecipient, platformFee);
         
         emit ListingPurchased(_listingId, msg.sender, _amount, totalPrice);
     }
@@ -118,6 +120,13 @@ contract PropertyMarketplace is ReentrancyGuardUpgradeable, Ownable {
         require(_newFeeRecipient != address(0), "Invalid address");
         feeRecipient = _newFeeRecipient;
         emit FeeRecipientUpdated(_newFeeRecipient);
+    }
+    
+    // Update USDC token address (only owner)
+    function updateUsdcToken(address _newUsdcToken) external onlyOwner {
+        require(_newUsdcToken != address(0), "Invalid address");
+        usdcToken = _newUsdcToken;
+        emit USDCTokenUpdated(_newUsdcToken);
     }
     
     // Get all active listings

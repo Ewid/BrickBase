@@ -6,7 +6,8 @@ import {
   PropertyRegistry, 
   RentDistribution, 
   PropertyMarketplace, 
-  PropertyDAO
+  PropertyDAO,
+  IERC20
 } from "../typechain-types";
 import * as dotenv from "dotenv";
 import path from "path";
@@ -23,22 +24,25 @@ interface DeployedAddresses {
   propertyDAO: string;
   // Map to store property token addresses by name
   propertyTokens: { [key: string]: string };
+  // USDC token address
+  usdcToken: string;
 }
 
 // Populate with your deployed contract addresses or use .env
 const deployedAddresses: DeployedAddresses = {
-  propertyTokenFactory: process.env.PROPERTY_TOKEN_FACTORY_ADDRESS || "0x06b71913F6414A4cc1f6c77c68d1c0D4e9093807",
-  propertyNFT: process.env.PROPERTY_NFT_ADDRESS || "0x79744a5832E911aA8A9c35408f7409232C8AFE6D",
-  propertyRegistry: process.env.PROPERTY_REGISTRY_ADDRESS || "0x9c3A881d4ad4FdBbf07F15aAD0ea20a4cc625e81",
-  rentDistribution: process.env.RENT_DISTRIBUTION_ADDRESS || "0xf98DA6026B4cA7662a80833EC2dC757395eFaFe6",
-  propertyMarketplace: process.env.PROPERTY_MARKETPLACE_ADDRESS || "0x8b69548f445f4B76e6AC8B3deF04dD9A0587D314",
-  propertyDAO: process.env.PROPERTY_DAO_ADDRESS || "0xe04A6AB85c8E2e24b8c0fbd128E88b7981Df1b18",
+  propertyTokenFactory: process.env.PROPERTY_TOKEN_FACTORY_ADDRESS || "0x67410f8784eA3447c4f20A60840D3269F1c5e135",
+  propertyNFT: process.env.PROPERTY_NFT_ADDRESS || "0x2923f8C35aBC526041A64e8885ec61E1c654DFf1",
+  propertyRegistry: process.env.PROPERTY_REGISTRY_ADDRESS || "0x9f5bA89EACeCeA215c9fF948068c1F923ab8E068",
+  rentDistribution: process.env.RENT_DISTRIBUTION_ADDRESS || "0xECfC4AEA8DF2aeFd6a292F9bE37E4F8cDd913b7D",
+  propertyMarketplace: process.env.PROPERTY_MARKETPLACE_ADDRESS || "0xAd6e864BEaD48b9DdEcc0cE53CA25cAEdeBEC064",
+  propertyDAO: process.env.PROPERTY_DAO_ADDRESS || "0xdDD158d7cb2cC650e54E2fa4E57B7d2494F5297F",
   propertyTokens: {
-    "Miami Beachfront Villa": process.env.MBV_TOKEN_ADDRESS || "0xC95137A1659d28d8a1CfCF3F7F37F2737801e007",
-    "Manhattan Luxury Condo": process.env.MLC_TOKEN_ADDRESS || "0x5419ca254Aa6635235aCd66B09Da27Ba2a72BEEB",
-    "San Francisco Modern Townhouse": process.env.SFMT_TOKEN_ADDRESS || "0x432a5cBb7278C19Ca7b3f44A7fc509f4D6e2D185",
-    "Chicago Downtown Penthouse": process.env.CDP_TOKEN_ADDRESS || "0x14fdE87ed08a7F496A9838C541AaD472Db55d68e",
-  }
+    "Miami Beachfront Villa": process.env.MBV_TOKEN_ADDRESS || "0x55E6e92C51B7E9d94a90dB539B0636a7BB713325",
+    "Manhattan Luxury Condo": process.env.MLC_TOKEN_ADDRESS || "0x13690b78E6d8C40019ce71e7902AFdB1d287Ff47",
+    "San Francisco Modern Townhouse": process.env.SFMT_TOKEN_ADDRESS || "0xA06C5216a8a0Bf26a7E09c47e2211215a058a3d5",
+    "Chicago Downtown Penthouse": process.env.CDP_TOKEN_ADDRESS || "0x1038Da4f080Df159e9bdc6b47d6268B060d0586C",
+  },
+  usdcToken: process.env.USDC_TOKEN_ADDRESS || "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
 };
 
 // Property details
@@ -163,6 +167,13 @@ async function main() {
         console.warn(`No address found for ${prop.name} token, skipping`);
       }
     }
+
+    // Connect to USDC token
+    const usdc = await ethers.getContractAt(
+      "IERC20",
+      deployedAddresses.usdcToken
+    ) as IERC20;
+    console.log(`Connected to USDC token at ${deployedAddresses.usdcToken}`);
 
     // Mint NFTs for each property
     console.log("\nMinting property NFTs...");
@@ -404,9 +415,14 @@ async function main() {
           continue;
         }
         
-        // Deployer deposits 3 months of rent for the property
+        // Use USDC for rent payments
         const threeMonthsRent = property.monthlyRent * BigInt(3);
-        await rentDistribution.depositRent(tokenAddress, { value: threeMonthsRent });
+        
+        // First approve USDC transfer
+        await usdc.approve(rentDistribution.getAddress(), threeMonthsRent);
+        
+        // Then deposit rent using USDC with the new function signature
+        await (rentDistribution as any).depositRent(tokenAddress, threeMonthsRent);
         rentDepositsCount++;
         console.log(`Deposited 3 months of rent (${ethers.formatUnits(threeMonthsRent, 6)} USDC) for ${property.name}`);
       } catch (error: any) {
