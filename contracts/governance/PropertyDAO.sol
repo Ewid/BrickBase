@@ -12,6 +12,7 @@ contract PropertyDAO is Ownable {
         string description;
         address targetContract;
         bytes functionCall;
+        address propertyTokenAddress; // Address of the property token this proposal relates to
         uint256 votesFor;
         uint256 votesAgainst;
         uint256 startTime;
@@ -39,7 +40,7 @@ contract PropertyDAO is Ownable {
     mapping(uint256 => mapping(address => bool)) public hasVoted;
     
     // Events
-    event ProposalCreated(uint256 indexed proposalId, address indexed proposer, string description);
+    event ProposalCreated(uint256 indexed proposalId, address indexed proposer, address indexed propertyTokenAddress, string description);
     event Voted(uint256 indexed proposalId, address indexed voter, bool support, uint256 votes);
     event ProposalExecuted(uint256 indexed proposalId);
     event ProposalThresholdUpdated(uint256 newThreshold);
@@ -63,13 +64,16 @@ contract PropertyDAO is Ownable {
     function createProposal(
         string memory _description,
         address _targetContract,
-        bytes memory _functionCall
+        bytes memory _functionCall,
+        address _propertyTokenAddress // Address of the relevant property token
     ) external returns (uint256) {
         uint256 proposerBalance = propertyToken.balanceOf(msg.sender);
         uint256 totalSupply = propertyToken.totalSupply();
         
         // Check if proposer meets the threshold requirement
         require((proposerBalance * 10000) / totalSupply >= proposalThreshold, "Insufficient tokens to propose");
+        // Check if the provided property token address is valid (optional, but good practice)
+        require(_propertyTokenAddress != address(0), "Invalid property token address");
         
         uint256 proposalId = proposals.length;
         
@@ -79,6 +83,7 @@ contract PropertyDAO is Ownable {
             description: _description,
             targetContract: _targetContract,
             functionCall: _functionCall,
+            propertyTokenAddress: _propertyTokenAddress,
             votesFor: 0,
             votesAgainst: 0,
             startTime: block.timestamp,
@@ -87,7 +92,7 @@ contract PropertyDAO is Ownable {
             passed: false
         }));
         
-        emit ProposalCreated(proposalId, msg.sender, _description);
+        emit ProposalCreated(proposalId, msg.sender, _propertyTokenAddress, _description);
         
         return proposalId;
     }

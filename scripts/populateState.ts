@@ -30,17 +30,17 @@ interface DeployedAddresses {
 
 // Populate with your deployed contract addresses or use .env
 const deployedAddresses: DeployedAddresses = {
-  propertyTokenFactory: process.env.PROPERTY_TOKEN_FACTORY_ADDRESS || "0x67410f8784eA3447c4f20A60840D3269F1c5e135",
-  propertyNFT: process.env.PROPERTY_NFT_ADDRESS || "0x2923f8C35aBC526041A64e8885ec61E1c654DFf1",
-  propertyRegistry: process.env.PROPERTY_REGISTRY_ADDRESS || "0x9f5bA89EACeCeA215c9fF948068c1F923ab8E068",
-  rentDistribution: process.env.RENT_DISTRIBUTION_ADDRESS || "0xECfC4AEA8DF2aeFd6a292F9bE37E4F8cDd913b7D",
-  propertyMarketplace: process.env.PROPERTY_MARKETPLACE_ADDRESS || "0xAd6e864BEaD48b9DdEcc0cE53CA25cAEdeBEC064",
-  propertyDAO: process.env.PROPERTY_DAO_ADDRESS || "0xdDD158d7cb2cC650e54E2fa4E57B7d2494F5297F",
+  propertyTokenFactory: process.env.PROPERTY_TOKEN_FACTORY_ADDRESS || "0x4A30089743ACA139Ea15aEFfFDee64bE43af7095",
+  propertyNFT: process.env.PROPERTY_NFT_ADDRESS || "0x49963ff38071Ec3B0761DaF358310C68beC60Ca1",
+  propertyRegistry: process.env.PROPERTY_REGISTRY_ADDRESS || "0x0a50A499CD04880FA8ad1d090Aa3b29280289705",
+  rentDistribution: process.env.RENT_DISTRIBUTION_ADDRESS || "0x70FEaB157a7551B047a9aCE9267007AE0Bc3d398",
+  propertyMarketplace: process.env.PROPERTY_MARKETPLACE_ADDRESS || "0xAbb15D438f08e4b9F15bcEB1B0F9095d8eb28133",
+  propertyDAO: process.env.PROPERTY_DAO_ADDRESS || "0x2a6897526D504a08645051d9a5Bd10185fDd8D18",
   propertyTokens: {
-    "Miami Beachfront Villa": process.env.MBV_TOKEN_ADDRESS || "0x55E6e92C51B7E9d94a90dB539B0636a7BB713325",
-    "Manhattan Luxury Condo": process.env.MLC_TOKEN_ADDRESS || "0x13690b78E6d8C40019ce71e7902AFdB1d287Ff47",
-    "San Francisco Modern Townhouse": process.env.SFMT_TOKEN_ADDRESS || "0xA06C5216a8a0Bf26a7E09c47e2211215a058a3d5",
-    "Chicago Downtown Penthouse": process.env.CDP_TOKEN_ADDRESS || "0x1038Da4f080Df159e9bdc6b47d6268B060d0586C",
+    "Miami Beachfront Villa": process.env.MBV_TOKEN_ADDRESS || "0xD7E659016259efbf6BC9595532F753BdF02f51e2",
+    "Manhattan Luxury Condo": process.env.MLC_TOKEN_ADDRESS || "0x59c3D2B6186B68cfe45F5f865bF723d83Bef0C7b",
+    "San Francisco Modern Townhouse": process.env.SFMT_TOKEN_ADDRESS || "0x415781420DF868fE87E2DC6b3025953E4cE71B01",
+    "Chicago Downtown Penthouse": process.env.CDP_TOKEN_ADDRESS || "0x5EFC4D9A8cf3625aaE4f5337F2e9E8b1b53E52E8",
   },
   usdcToken: process.env.USDC_TOKEN_ADDRESS || "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
 };
@@ -438,6 +438,7 @@ async function main() {
       // Deployer creates a proposal
       const firstPropertyName = Object.keys(propertyTokens)[0];
       const firstPropertyToken = propertyTokens[firstPropertyName];
+      const firstPropertyTokenAddress = await firstPropertyToken.getAddress();
       
       if (firstPropertyToken) {
         try {
@@ -452,15 +453,16 @@ async function main() {
           const mockCalldata = "0x";
           const mockTarget = deployedAddresses.rentDistribution;
           
-          // Try to create a proposal
-          await propertyDAO.createProposal(
+          // Try to create a proposal with the property token address
+          await (propertyDAO as any).createProposal(
             proposalDescription,
             mockTarget,
-            mockCalldata
+            mockCalldata,
+            firstPropertyTokenAddress // Pass the relevant property token address
           );
           
           createdProposalsCount++;
-          console.log(`Created proposal: "${proposalDescription}"`);
+          console.log(`Created proposal: "${proposalDescription}" for property ${firstPropertyTokenAddress}`);
         } catch (error: any) {
           console.warn(`Error creating proposal: ${error.message}`);
         }
