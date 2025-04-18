@@ -227,11 +227,11 @@ async function main() {
         // Use the real IPFS CIDs for each property
         let ipfsCID = "";
         if (prop.name === "Miami Beachfront Villa") {
-          ipfsCID = "bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau";
-        } else if (prop.name === "Manhattan Luxury Condo") {
           ipfsCID = "bafkreighvyg3j4ajbssvszw4kzdsovo6sbycfm3cbn6pfw6uqa2qbgmamy";
-        } else if (prop.name === "San Francisco Modern Townhouse") {
+        } else if (prop.name === "Manhattan Luxury Condo") {
           ipfsCID = "bafkreifzkvccvttmnzhpcmmuz6vwpdsqjz4fcvjwa4milc2mqmojo45roa";
+        } else if (prop.name === "San Francisco Modern Townhouse") {
+          ipfsCID = "bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau";
         } else if (prop.name === "Chicago Downtown Penthouse") {
           ipfsCID = "bafkreihha34zb3l6f3wcfrig53h6ooyarxg7fpujediqcinzgeb4ok6f5u";
         }
