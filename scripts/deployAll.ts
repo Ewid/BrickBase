@@ -1,7 +1,7 @@
 // scripts/deployAll.ts
 import { ethers } from "hardhat";
 import { AddressLike } from "ethers";
-import { PropertyRegistry } from "../typechain-types";
+import { PropertyRegistry, PropertyNFT } from "../typechain-types";
 
 async function main() {
   const [deployer] = await ethers.getSigners();
@@ -97,6 +97,14 @@ async function main() {
     }
   ];
 
+  // Define CIDs for each property - ENSURE THESE ARE CORRECT
+  const propertyCIDs: Record<string, string> = {
+      "Miami Beachfront Villa": "bafkreighvyg3j4ajbssvszw4kzdsovo6sbycfm3cbn6pfw6uqa2qbgmamy",
+      "Manhattan Luxury Condo": "bafkreifzkvccvttmnzhpcmmuz6vwpdsqjz4fcvjwa4milc2mqmojo45roa",
+      "San Francisco Modern Townhouse": "bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau",
+      "Chicago Downtown Penthouse": "bafkreihha34zb3l6f3wcfrig53h6ooyarxg7fpujediqcinzgeb4ok6f5u"
+  };
+
   const propertyTokenAddresses: string[] = [];
   
   for (let i = 0; i < properties.length; i++) {
@@ -139,8 +147,38 @@ async function main() {
     
     propertyTokenAddresses.push(tokenAddress);
     
+    // --- Mint the corresponding NFT for this property --- 
+    const tokenIdToMint = BigInt(i); // Token ID will be 0, 1, 2, 3
+    const propertyName = property.name;
+    const ipfsCID = propertyCIDs[propertyName];
+    if (!ipfsCID) {
+      console.error(`Missing IPFS CID for ${propertyName}, cannot mint NFT.`);
+      continue; // Or handle error appropriately
+    }
+    const metadataURI = `ipfs://${ipfsCID}`;
+    // Example details - Adjust as needed or fetch from a config
+    const propertyLocation = `${propertyName} Location`; 
+    const squareFootage = 2000 + (i * 500);
+    const constructionYear = 2020 - (i * 5); 
+    const propertyType = "Residential";
+    
+    console.log(`Minting NFT for ${propertyName} with tokenId ${tokenIdToMint}...`);
+    const mintTx = await propertyNFT.mintProperty(
+        deployer.address, // Mint to deployer initially
+        metadataURI,
+        propertyLocation,
+        BigInt(squareFootage),
+        property.value, // Use property value from config
+        BigInt(constructionYear),
+        propertyType,
+        tokenAddress // Associate with the just created token
+    );
+    await mintTx.wait();
+    console.log(`NFT ${tokenIdToMint} minted successfully.`);
+    // --- End NFT Minting ---
+
     // Register in PropertyRegistry
-    console.log(`Registering property ${i} in registry...`);
+    console.log(`Registering property NFT ${tokenIdToMint} with Token ${tokenAddress} in registry...`);
     
     // Use direct function access with type casting for the 3-parameter version
     const registerTx = await (propertyRegistry as any)["registerProperty(address,uint256,address)"](
@@ -183,7 +221,12 @@ async function main() {
   console.log(`PropertyDAO: ${propertyDAOAddress}`);
   console.log("\n--- Property Tokens ---");
   for (let i = 0; i < properties.length; i++) {
-    console.log(`${properties[i].name} (${properties[i].symbol}): ${propertyTokenAddresses[i]}`);
+    // Ensure propertyTokenAddresses has the entry before logging
+    if (propertyTokenAddresses[i]) {
+      console.log(`${properties[i].name} (${properties[i].symbol}): ${propertyTokenAddresses[i]}`);
+    } else {
+      console.log(`${properties[i].name} (${properties[i].symbol}): FAILED TO CREATE/RETRIEVE ADDRESS`);
+    }
   }
   console.log("-------------------------");
 }

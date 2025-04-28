@@ -1,490 +1,522 @@
 // scripts/populateState.ts
 import { ethers } from "hardhat";
-import { 
-  PropertyToken, 
-  PropertyNFT, 
-  PropertyRegistry, 
-  RentDistribution, 
-  PropertyMarketplace, 
-  PropertyDAO,
-  IERC20
+import {
+    PropertyToken,
+    PropertyNFT,
+    PropertyRegistry,
+    RentDistribution,
+    PropertyMarketplace,
+    PropertyDAO,
+    PropertyTokenFactory, // Added Factory type
+    IERC20 // Keep IERC20 for USDC
 } from "../typechain-types";
 import * as dotenv from "dotenv";
 import path from "path";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
+// --- Configuration ---
+
+const USER_ADDRESSES = [
+    "0xa83126A279960797233d48488e5908d6C1E72f2F",
+    "0xcd64902df08575Df5F3499CdA6F14154fB48E362",
+    "0x61210F2D208BaDF9101d91890C91EEC186707446",
+    "0xdC6Ce97a7EB152D2f64Ae98512d3126601b74560"
+];
+
+// Define desired token distribution (Property Symbol -> User Index -> Amount (as string for parseUnits))
+// Make sure the total distributed per property doesn't exceed the total supply (10000)
+const TOKEN_DISTRIBUTION_PLAN: { [propertySymbol: string]: { [userIndex: number]: string } } = {
+    "MBV": { // Miami
+        0: "3000", // User A gets 3000
+        1: "0",  // User B gets 500
+        2: "1500", // User C gets 1000
+        3: "200"   // User D gets 200
+        // Deployer keeps remaining ~5300
+    },
+    "MLC": { // Manhattan
+        0: "1000",
+        1: "2500",
+        2: "1000",
+        3: "0"     // User D gets none
+        // Deployer keeps remaining ~5500
+    },
+    "SFMT": { // San Francisco
+        0: "500",
+        1: "2500",
+        2: "2000",
+        3: "500"
+        // Deployer keeps remaining ~4500
+    },
+    "CDP": { // Chicago
+        0: "200",
+        1: "4500",
+        2: "1000",
+        3: "0"
+        // Deployer keeps remaining ~4300
+    }
+};
+
+// Define marketplace listing scenarios (who lists what) - REDUCED PRICES
+const LISTING_SCENARIOS = [
+    { userIndex: 0, propertySymbol: "MBV", amount: "500", pricePerTokenUsdc: "0.10" }, // User A lists Miami tokens ($0.10/token)
+    { userIndex: 1, propertySymbol: "MLC", amount: "300", pricePerTokenUsdc: "0.15" }, // User B lists Manhattan ($0.15/token)
+    { userIndex: 2, propertySymbol: "SFMT", amount: "1000", pricePerTokenUsdc: "0.20" }, // User C lists San Fran ($0.20/token)
+    { userIndex: 1, propertySymbol: "CDP", amount: "250", pricePerTokenUsdc: "0.22" }, // User B lists Chicago ($0.22/token)
+    // Deployer also lists some
+    { userIndex: -1, propertySymbol: "MBV", amount: "1000", pricePerTokenUsdc: "0.09" }, // -1 indicates deployer ($0.09/token)
+    { userIndex: -1, propertySymbol: "CDP", amount: "500", pricePerTokenUsdc: "0.21" }  // ($0.21/token)
+];
+
+// Define DAO proposal scenarios
+const PROPOSAL_SCENARIOS = [
+    { userIndex: 0, propertySymbol: "MBV", description: "Proposal 1 (MBV): Reduce management fee by 0.5%", targetContractKey: "rentDistribution", calldata: "0x" }, // User A proposes for Miami
+    { userIndex: 1, propertySymbol: "CDP", description: "Proposal 2 (CDP): Special assessment for lobby renovation - 1000 USDC", targetContractKey: "rentDistribution", calldata: "0x" }, // User B proposes for Chicago
+    { userIndex: 2, propertySymbol: "SFMT", description: "Proposal 3 (SFMT): Approve new insurance provider", targetContractKey: "propertyRegistry", calldata: "0x" }, // User C proposes for SF
+    { userIndex: -1, propertySymbol: "MBV", description: "Proposal 4 (MBV): Increase reserve fund allocation", targetContractKey: "rentDistribution", calldata: "0x" },
+];
+
+// --- End Configuration ---
+
+
 // Get deployed contract addresses from environment variables
 interface DeployedAddresses {
-  propertyTokenFactory: string;
-  propertyNFT: string;
-  propertyRegistry: string;
-  rentDistribution: string;
-  propertyMarketplace: string;
-  propertyDAO: string;
-  // Map to store property token addresses by name
-  propertyTokens: { [key: string]: string };
-  // USDC token address
-  usdcToken: string;
+    propertyTokenFactory: string;
+    propertyNFT: string;
+    propertyRegistry: string;
+    rentDistribution: string;
+    propertyMarketplace: string;
+    propertyDAO: string;
+    usdcToken: string;
+    // We will fetch property token addresses dynamically
 }
 
 // Populate with your deployed contract addresses or use .env
 const deployedAddresses: DeployedAddresses = {
-  propertyTokenFactory: process.env.PROPERTY_TOKEN_FACTORY_ADDRESS || "0x4A30089743ACA139Ea15aEFfFDee64bE43af7095",
-  propertyNFT: process.env.PROPERTY_NFT_ADDRESS || "0x49963ff38071Ec3B0761DaF358310C68beC60Ca1",
-  propertyRegistry: process.env.PROPERTY_REGISTRY_ADDRESS || "0x0a50A499CD04880FA8ad1d090Aa3b29280289705",
-  rentDistribution: process.env.RENT_DISTRIBUTION_ADDRESS || "0x70FEaB157a7551B047a9aCE9267007AE0Bc3d398",
-  propertyMarketplace: process.env.PROPERTY_MARKETPLACE_ADDRESS || "0xAbb15D438f08e4b9F15bcEB1B0F9095d8eb28133",
-  propertyDAO: process.env.PROPERTY_DAO_ADDRESS || "0x2a6897526D504a08645051d9a5Bd10185fDd8D18",
-  propertyTokens: {
-    "Miami Beachfront Villa": process.env.MBV_TOKEN_ADDRESS || "0xD7E659016259efbf6BC9595532F753BdF02f51e2",
-    "Manhattan Luxury Condo": process.env.MLC_TOKEN_ADDRESS || "0x59c3D2B6186B68cfe45F5f865bF723d83Bef0C7b",
-    "San Francisco Modern Townhouse": process.env.SFMT_TOKEN_ADDRESS || "0x415781420DF868fE87E2DC6b3025953E4cE71B01",
-    "Chicago Downtown Penthouse": process.env.CDP_TOKEN_ADDRESS || "0x5EFC4D9A8cf3625aaE4f5337F2e9E8b1b53E52E8",
-  },
-  usdcToken: process.env.USDC_TOKEN_ADDRESS || "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+    propertyTokenFactory: process.env.PROPERTY_TOKEN_FACTORY_ADDRESS!,
+    propertyNFT: process.env.PROPERTY_NFT_ADDRESS!,
+    propertyRegistry: process.env.PROPERTY_REGISTRY_ADDRESS!,
+    rentDistribution: process.env.RENT_DISTRIBUTION_ADDRESS!,
+    propertyMarketplace: process.env.PROPERTY_MARKETPLACE_ADDRESS!,
+    propertyDAO: process.env.PROPERTY_DAO_ADDRESS!,
+    usdcToken: process.env.USDC_TOKEN_ADDRESS!
 };
 
-// Property details
+// Property details (used for identifying tokens, supply, and rent) - REDUCED RENT
 const properties = [
-  {
-    name: "Miami Beachfront Villa",
-    symbol: "MBV",
-    value: ethers.parseUnits("2500000", 6), // $2.5M
-    tokenPrice: ethers.parseUnits("250", 6), // $250
-    supply: 10000,  // 10,000 tokens
-    monthlyRent: ethers.parseUnits("10000", 6), // $10,000/month
-  },
-  {
-    name: "Manhattan Luxury Condo",
-    symbol: "MLC",
-    value: ethers.parseUnits("3200000", 6), // $3.2M
-    tokenPrice: ethers.parseUnits("320", 6), // $320
-    supply: 10000,  // 10,000 tokens
-    monthlyRent: ethers.parseUnits("15000", 6), // $15,000/month
-  },
-  {
-    name: "San Francisco Modern Townhouse",
-    symbol: "SFMT",
-    value: ethers.parseUnits("3800000", 6), // $3.8M
-    tokenPrice: ethers.parseUnits("380", 6), // $380
-    supply: 10000,  // 10,000 tokens
-    monthlyRent: ethers.parseUnits("18000", 6), // $18,000/month
-  },
-  {
-    name: "Chicago Downtown Penthouse",
-    symbol: "CDP",
-    value: ethers.parseUnits("4200000", 6), // $4.2M
-    tokenPrice: ethers.parseUnits("420", 6), // $420
-    supply: 10000,  // 10,000 tokens
-    monthlyRent: ethers.parseUnits("20000", 6), // $20,000/month
-  }
+    { name: "Miami Beachfront Villa", symbol: "MBV", supply: 10000, monthlyRent: ethers.parseUnits("0.5", 6) },   // $0.50/month
+    { name: "Manhattan Luxury Condo", symbol: "MLC", supply: 10000, monthlyRent: ethers.parseUnits("0.75", 6) }, // $0.75/month
+    { name: "San Francisco Modern Townhouse", symbol: "SFMT", supply: 10000, monthlyRent: ethers.parseUnits("0.90", 6) },// $0.90/month
+    { name: "Chicago Downtown Penthouse", symbol: "CDP", supply: 10000, monthlyRent: ethers.parseUnits("1.0", 6) }    // $1.00/month
 ];
 
-// Listing details for each property
-const listings = [
-  { 
-    property: "Miami Beachfront Villa",
-    tokenAmount: 50, // 50 tokens
-    pricePerToken: ethers.parseUnits("255", 6), // $255 per token (2% premium)
-  },
-  { 
-    property: "Manhattan Luxury Condo",
-    tokenAmount: 75, // 75 tokens
-    pricePerToken: ethers.parseUnits("330", 6), // $330 per token (3% premium)
-  },
-  { 
-    property: "San Francisco Modern Townhouse",
-    tokenAmount: 100, // 100 tokens
-    pricePerToken: ethers.parseUnits("390", 6), // $390 per token (2.6% premium)
-  },
-  { 
-    property: "Chicago Downtown Penthouse",
-    tokenAmount: 120, // 120 tokens
-    pricePerToken: ethers.parseUnits("440", 6), // $440 per token (4.8% premium)
-  }
-];
+// Function to add delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function main() {
-  try {
-    // Get signers - on testnet we only have the deployer
     const [deployer] = await ethers.getSigners();
+    console.log("--- Starting Populate State Script ---");
     console.log("Using deployer address:", deployer.address);
-    
-    // Check if addresses are configured
-    if (!deployedAddresses.propertyTokenFactory || !deployedAddresses.propertyNFT ||
-        !deployedAddresses.propertyRegistry || !deployedAddresses.rentDistribution || 
-        !deployedAddresses.propertyMarketplace) {
-      throw new Error("Contract addresses not properly configured in .env");
+    console.log("Target User Addresses:", USER_ADDRESSES);
+
+    // Validate essential addresses are present
+    for (const [key, value] of Object.entries(deployedAddresses)) {
+        if (!value) {
+            throw new Error(`Missing address for ${key} in environment variables or config.`);
+        }
+        console.log(`Using ${key}: ${value}`);
     }
 
-    // Connect to deployed contracts
+    // --- Connect to Deployed Contracts ---
     console.log("\nConnecting to deployed contracts...");
-    
-    const propertyTokenFactory = await ethers.getContractAt(
-      "PropertyTokenFactory",
-      deployedAddresses.propertyTokenFactory
-    );
-    
-    const propertyNFT = await ethers.getContractAt(
-      "PropertyNFT",
-      deployedAddresses.propertyNFT
-    ) as PropertyNFT;
-    
-    const propertyRegistry = await ethers.getContractAt(
-      "PropertyRegistry",
-      deployedAddresses.propertyRegistry
-    ) as PropertyRegistry;
-    
-    const rentDistribution = await ethers.getContractAt(
-      "RentDistribution",
-      deployedAddresses.rentDistribution
-    ) as RentDistribution;
-    
-    const propertyMarketplace = await ethers.getContractAt(
-      "PropertyMarketplace",
-      deployedAddresses.propertyMarketplace
-    ) as PropertyMarketplace;
-    
-    // Connect to PropertyDAO (only if address exists)
-    let propertyDAO;
-    if (deployedAddresses.propertyDAO) {
-      propertyDAO = await ethers.getContractAt(
-        "PropertyDAO",
-        deployedAddresses.propertyDAO
-      ) as PropertyDAO;
-      console.log("Connected to PropertyDAO");
+    const propertyTokenFactory = await ethers.getContractAt("PropertyTokenFactory", deployedAddresses.propertyTokenFactory) as PropertyTokenFactory;
+    const propertyNFT = await ethers.getContractAt("PropertyNFT", deployedAddresses.propertyNFT) as PropertyNFT;
+    const propertyRegistry = await ethers.getContractAt("PropertyRegistry", deployedAddresses.propertyRegistry) as PropertyRegistry;
+    const rentDistribution = await ethers.getContractAt("RentDistribution", deployedAddresses.rentDistribution) as RentDistribution;
+    const propertyMarketplace = await ethers.getContractAt("PropertyMarketplace", deployedAddresses.propertyMarketplace) as PropertyMarketplace;
+    const propertyDAO = await ethers.getContractAt("PropertyDAO", deployedAddresses.propertyDAO) as PropertyDAO;
+    const usdc = await ethers.getContractAt("IERC20", deployedAddresses.usdcToken) as IERC20;
+    console.log("Successfully connected to core contracts.");
+
+    // --- Fetch Property Token Addresses Dynamically ---
+    console.log("\nFetching Property Token addresses from Factory...");
+    const fetchedTokenAddresses = await propertyTokenFactory.getAllTokens();
+    const propertyTokens: { [symbol: string]: { address: string, contract: PropertyToken, name: string } } = {};
+
+    if (fetchedTokenAddresses.length !== properties.length) {
+        console.warn(`Mismatch: Factory has ${fetchedTokenAddresses.length} tokens, expected ${properties.length}. Check deployment.`);
+        // Attempt to match by order, assuming deployment order matches `properties` array
+        for (let i = 0; i < Math.min(fetchedTokenAddresses.length, properties.length); i++) {
+            const prop = properties[i];
+            const address = fetchedTokenAddresses[i];
+            propertyTokens[prop.symbol] = {
+                address: address,
+                contract: await ethers.getContractAt("PropertyToken", address) as PropertyToken,
+                name: prop.name
+            };
+            console.log(`Fetched ${prop.symbol} (${prop.name}): ${address}`);
+        }
+    } else {
+        // Assuming order matches properties array
+         for (let i = 0; i < properties.length; i++) {
+            const prop = properties[i];
+            const address = fetchedTokenAddresses[i];
+            propertyTokens[prop.symbol] = {
+                address: address,
+                contract: await ethers.getContractAt("PropertyToken", address) as PropertyToken,
+                name: prop.name
+            };
+            console.log(`Fetched ${prop.symbol} (${prop.name}): ${address}`);
+        }
+    }
+     if (Object.keys(propertyTokens).length === 0) {
+        throw new Error("Could not fetch any property token addresses from the factory. Ensure tokens were created.");
     }
 
-    // Connect to PropertyToken contracts
-    const propertyTokens: { [key: string]: PropertyToken } = {};
-    for (const prop of properties) {
-      const tokenAddress = deployedAddresses.propertyTokens[prop.name];
-      if (tokenAddress) {
-        propertyTokens[prop.name] = await ethers.getContractAt("PropertyToken", tokenAddress) as PropertyToken;
-        console.log(`Connected to ${prop.name} token at ${tokenAddress}`);
-      } else {
-        console.warn(`No address found for ${prop.name} token, skipping`);
-      }
-    }
 
-    // Connect to USDC token
-    const usdc = await ethers.getContractAt(
-      "IERC20",
-      deployedAddresses.usdcToken
-    ) as IERC20;
-    console.log(`Connected to USDC token at ${deployedAddresses.usdcToken}`);
-
-    // Mint NFTs for each property
-    console.log("\nMinting property NFTs...");
-    let mintedNFTCount = 0;
-    for (const prop of properties) {
-      try {
-        const tokenAddress = deployedAddresses.propertyTokens[prop.name];
-        if (!tokenAddress) {
-          console.warn(`No token address found for ${prop.name}, skipping NFT minting`);
-          continue;
-        }
-
-        // First check if the NFT actually exists in the PropertyNFT contract
-        const tokenId = mintedNFTCount;
-        let nftExists = false;
-        
-        try {
-          // Try to call ownerOf to check if the NFT exists
-          const owner = await propertyNFT.ownerOf(tokenId);
-          console.log(`NFT for ${prop.name} already exists with tokenId ${tokenId} owned by ${owner}`);
-          nftExists = true;
-        } catch (error) {
-          console.log(`NFT with tokenId ${tokenId} doesn't exist yet, will mint it`);
-        }
-        
-        // If NFT exists, check if it's registered in the PropertyRegistry
-        // If not, register it
-        if (nftExists) {
-          try {
-            const registeredTokenAddress = await propertyRegistry.getPropertyToken(deployedAddresses.propertyNFT, tokenId);
-            if (registeredTokenAddress.toLowerCase() !== tokenAddress.toLowerCase()) {
-              console.log(`Updating registry for tokenId ${tokenId} to point to ${tokenAddress}`);
-              await (propertyRegistry as any).registerProperty(deployedAddresses.propertyNFT, tokenId, tokenAddress);
-            }
-          } catch (error) {
-            console.log(`NFT exists but not registered, registering tokenId ${tokenId} with address ${tokenAddress}`);
-            await (propertyRegistry as any).registerProperty(deployedAddresses.propertyNFT, tokenId, tokenAddress);
-          }
-          
-          mintedNFTCount++;
-          continue;
-        }
-
-        // Format property location and details
-        const propertyLocation = `${prop.name} Location`;
-        const squareFootage = 2000 + (mintedNFTCount * 500); // Varying square footage
-        const purchasePrice = prop.value; // Using the property value as purchase price
-        const constructionYear = 2020 - (mintedNFTCount * 5); // Varying construction years
-        const propertyType = "Residential";
-        
-        // Use the real IPFS CIDs for each property
-        let ipfsCID = "";
-        if (prop.name === "Miami Beachfront Villa") {
-          ipfsCID = "bafkreighvyg3j4ajbssvszw4kzdsovo6sbycfm3cbn6pfw6uqa2qbgmamy";
-        } else if (prop.name === "Manhattan Luxury Condo") {
-          ipfsCID = "bafkreifzkvccvttmnzhpcmmuz6vwpdsqjz4fcvjwa4milc2mqmojo45roa";
-        } else if (prop.name === "San Francisco Modern Townhouse") {
-          ipfsCID = "bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau";
-        } else if (prop.name === "Chicago Downtown Penthouse") {
-          ipfsCID = "bafkreihha34zb3l6f3wcfrig53h6ooyarxg7fpujediqcinzgeb4ok6f5u";
-        }
-        const metadataURI = `ipfs://${ipfsCID}`;
-        
-        // Mint the NFT
-        console.log(`Minting NFT for ${prop.name} with tokenId ${tokenId} and metadata ${metadataURI}`);
-        const mintTx = await propertyNFT.mintProperty(
-          deployer.address,
-          metadataURI,
-          propertyLocation,
-          squareFootage,
-          purchasePrice,
-          constructionYear,
-          propertyType,
-          tokenAddress
-        );
-        
-        await mintTx.wait();
-        console.log(`Minted NFT for ${prop.name} with tokenId ${tokenId}`);
-        
-        // Register the NFT in the PropertyRegistry if not already registered
-        try {
-          const registeredTokenAddress = await propertyRegistry.getPropertyToken(deployedAddresses.propertyNFT, tokenId);
-          if (registeredTokenAddress.toLowerCase() !== tokenAddress.toLowerCase()) {
-            console.log(`Updating registry for tokenId ${tokenId} to point to ${tokenAddress}`);
-            await (propertyRegistry as any).registerProperty(deployedAddresses.propertyNFT, tokenId, tokenAddress);
-          } else {
-            console.log(`Property already registered correctly in registry for tokenId ${tokenId}`);
-          }
-        } catch (error) {
-          console.log(`Registering tokenId ${tokenId} with token address ${tokenAddress}`);
-          await (propertyRegistry as any).registerProperty(deployedAddresses.propertyNFT, tokenId, tokenAddress);
-        }
-        
-        mintedNFTCount++;
-      } catch (error: any) {
-        console.warn(`Error processing ${prop.name}: ${error.message}`);
-      }
-    }
-
-    // After all properties are processed, update NFT metadata with IPFS CIDs
-    console.log("\n--- Updating NFT metadata with IPFS CIDs ---");
-    
-    // Define CIDs for each property
-    const propertyCIDs: Record<string, string> = {
-      "Miami Beachfront Villa": "bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau",
-      "Manhattan Luxury Condo": "bafkreighvyg3j4ajbssvszw4kzdsovo6sbycfm3cbn6pfw6uqa2qbgmamy",
-      "San Francisco Modern Townhouse": "bafkreifzkvccvttmnzhpcmmuz6vwpdsqjz4fcvjwa4milc2mqmojo45roa",
-      "Chicago Downtown Penthouse": "bafkreihha34zb3l6f3wcfrig53h6ooyarxg7fpujediqcinzgeb4ok6f5u"
-    };
-    
-    // Loop through properties and update their token URIs
+    // --- Verify NFT Minting & Registration (Optional Check) ---
+    console.log("\nVerifying NFT and Registry status (optional)...");
     for (let i = 0; i < properties.length; i++) {
-      const prop = properties[i];
-      const tokenId = i; // Assuming tokenIds match the property index
-      const ipfsCID = propertyCIDs[prop.name];
-      
-      if (!ipfsCID) {
-        console.error(`❌ No CID found for property ${prop.name}`);
-        continue;
-      }
-      
-      const metadataURI = `ipfs://${ipfsCID}`;
-      
-      try {
-        console.log(`Updating metadata for ${prop.name} (tokenId: ${tokenId}) to ${metadataURI}`);
-        const tx = await propertyNFT.updateTokenURI(tokenId, metadataURI);
-        await tx.wait();
-        console.log(`✅ Metadata updated successfully for ${prop.name}`);
-      } catch (error: any) {
-        console.error(`❌ Error updating metadata for ${prop.name}:`, error.message || String(error));
-      }
-    }
-
-    // Mint tokens to deployer first
-    console.log("\nMinting tokens to deployer account...");
-    for (const [propertyName, propertyToken] of Object.entries(propertyTokens)) {
-      try {
-        // Check if deployer already has tokens
-        const deployerBalance = await propertyToken.balanceOf(deployer.address);
-        if (deployerBalance == 0n) {
-          // Token owner should be the deployer, so they should be able to mint
-          const mintAmount = ethers.parseUnits("10000", 18); // Mint the total supply
-          await propertyToken.mint(deployer.address, mintAmount);
-          console.log(`Minted ${ethers.formatUnits(mintAmount, 18)} ${propertyName} tokens to deployer`);
-        } else {
-          console.log(`Deployer already has ${ethers.formatUnits(deployerBalance, 18)} ${propertyName} tokens`);
+        const prop = properties[i];
+        const tokenInfo = propertyTokens[prop.symbol];
+        if (!tokenInfo) {
+            console.warn(`Skipping verification for ${prop.name}, token address not found.`);
+            continue;
         }
-      } catch (error: any) {
-        console.warn(`Error minting ${propertyName} tokens: ${error.message}`);
-      }
-    }
-
-    // Since we're on a testnet, we'll use only the deployer account
-    console.log("\nDistributing property tokens to addresses...");
-    let distributedTokenCount = 0;
-    
-    // Create some hardcoded test addresses to transfer tokens to
-    const testAddresses = [
-      "0xa83126A279960797233d48488e5908d6C1E72f2F", // User's first address
-      "0xcd64902df08575Df5F3499CdA6F14154fB48E362"  // User's second address
-    ];
-    
-    for (const [propertyName, propertyToken] of Object.entries(propertyTokens)) {
-      // Distribute tokens to test addresses
-      for (const testAddress of testAddresses) {
         try {
-          // Transfer 200 tokens to each test address for each property
-          const tokenAmount = ethers.parseUnits("200", 18);
-          
-          // Check balance of deployer to make sure they have enough tokens
-          const deployerBalance = await propertyToken.balanceOf(deployer.address);
-          console.log(`Deployer balance of ${propertyName}: ${ethers.formatUnits(deployerBalance, 18)}`);
-          
-          if (deployerBalance >= tokenAmount) {
-            await propertyToken.transfer(testAddress, tokenAmount);
-            distributedTokenCount++;
-            console.log(`Transferred 200 ${propertyName} tokens to ${testAddress}`);
-          } else {
-            console.warn(`Deployer doesn't have enough ${propertyName} tokens to transfer`);
-          }
+            const owner = await propertyNFT.ownerOf(i);
+            const registeredToken = await propertyRegistry.getPropertyToken(deployedAddresses.propertyNFT, i);
+            console.log(`NFT ${i} (${prop.name}): Owner ${owner}, Registered Token ${registeredToken} (Expected: ${tokenInfo.address})`);
+            if (registeredToken.toLowerCase() !== tokenInfo.address.toLowerCase()) {
+                console.warn(`Registry mismatch for NFT ${i}! Expected ${tokenInfo.address}, got ${registeredToken}. Consider re-registering.`);
+                // Optional: Add re-registration logic here if needed
+                // console.log(`Attempting to re-register NFT ${i}...`);
+                // const registerTx = await (propertyRegistry as any)["registerProperty(address,uint256,address)"](
+                //     deployedAddresses.propertyNFT,
+                //     BigInt(i),
+                //     tokenInfo.address
+                // );
+                // await registerTx.wait();
+                // console.log(`Re-registration complete for NFT ${i}.`);
+                // await delay(1000); // Add delay after transaction
+            }
         } catch (error: any) {
-          console.warn(`Error transferring ${propertyName} tokens: ${error.message}`);
+            console.warn(`Could not verify NFT ${i} (${prop.name}): ${error.message}. Was it minted and registered?`);
         }
-      }
+         await delay(500); // Small delay between reads
     }
-    
-    // Step 2: Create listings with deployer account
-    console.log("\nCreating listings on marketplace...");
-    let createdListingsCount = 0;
-    
-    for (const listing of listings) {
-      try {
-        // Get the property token address
-        const tokenAddress = deployedAddresses.propertyTokens[listing.property];
-        if (!tokenAddress) {
-          console.warn(`No token address found for ${listing.property}, skipping listing`);
-          continue;
+
+    // --- Ensure Deployer has Initial Tokens ---
+    console.log("\nEnsuring deployer has initial tokens...");
+    for (const symbol in propertyTokens) {
+        const tokenInfo = propertyTokens[symbol];
+        try {
+            const deployerBalance = await tokenInfo.contract.balanceOf(deployer.address);
+            const totalSupply = await tokenInfo.contract.totalSupply(); // Fetch total supply for context
+            const expectedTotalSupply = ethers.parseUnits(properties.find(p => p.symbol === symbol)!.supply.toString(), 18);
+
+            console.log(`Deployer balance for ${symbol}: ${ethers.formatUnits(deployerBalance, 18)} / ${ethers.formatUnits(expectedTotalSupply, 18)}`);
+
+            // Mint only if balance is zero and total supply is less than expected (indicating incomplete initial mint)
+             if (deployerBalance === 0n && totalSupply < expectedTotalSupply) {
+                const amountToMint = expectedTotalSupply - totalSupply;
+                if (amountToMint > 0n) {
+                    console.log(`Minting initial ${ethers.formatUnits(amountToMint, 18)} ${symbol} tokens to deployer ${deployer.address}...`);
+                    const mintTx = await tokenInfo.contract.mint(deployer.address, amountToMint);
+                    await mintTx.wait();
+                    console.log(`Minted ${symbol} tokens.`);
+                    await delay(1000); // Add delay after transaction
+                }
+             } else if (deployerBalance < expectedTotalSupply && deployerBalance > 0n) {
+                 console.log(`Deployer already has some ${symbol} tokens, assuming initial mint occurred.`);
+             } else if (deployerBalance.toString() === expectedTotalSupply.toString()){
+                 console.log(`Deployer holds the total supply for ${symbol}.`);
+             }
+        } catch (error: any) {
+            console.error(`Error checking/minting for ${symbol}: ${error.message}`);
         }
-        
-        // Deployer creates a listing for each property
-        const propertyToken = await ethers.getContractAt("PropertyToken", tokenAddress) as PropertyToken;
-        
-        // Approve marketplace to transfer tokens
-        const tokenAmount = ethers.parseUnits(listing.tokenAmount.toString(), 18);
-        
-        // Check balance to ensure deployer has enough tokens
-        const deployerBalance = await propertyToken.balanceOf(deployer.address);
-        if (deployerBalance < tokenAmount) {
-          console.warn(`Deployer doesn't have enough ${listing.property} tokens to create listing`);
-          continue;
-        }
-        
-        await propertyToken.approve(deployedAddresses.propertyMarketplace, tokenAmount);
-        
-        // Create listing
-        const tx = await propertyMarketplace.createListing(
-          tokenAddress,
-          tokenAmount,
-          listing.pricePerToken
-        );
-        await tx.wait();
-        createdListingsCount++;
-        console.log(`Created listing for ${listing.tokenAmount} ${listing.property} tokens at ${ethers.formatUnits(listing.pricePerToken, 6)} USDC per token`);
-      } catch (error: any) {
-        console.warn(`Error creating listing for ${listing.property}: ${error.message}`);
-      }
+         await delay(500); // Small delay between reads/writes
     }
-    
-    // Step 3: Deposit rent for properties
-    console.log("\nDepositing rent for properties...");
+
+    // --- Distribute Tokens to Users ---
+    console.log("\nDistributing tokens to users...");
+    let successfulTransfers = 0;
+    for (const symbol in TOKEN_DISTRIBUTION_PLAN) {
+        const distribution = TOKEN_DISTRIBUTION_PLAN[symbol];
+        const tokenInfo = propertyTokens[symbol];
+        if (!tokenInfo) {
+            console.warn(`Cannot distribute ${symbol} tokens, address not found.`);
+            continue;
+        }
+
+        console.log(`Distributing ${symbol} (${tokenInfo.name})...`);
+        const deployerBalanceStart = await tokenInfo.contract.balanceOf(deployer.address);
+        let totalToDistribute = 0n;
+
+        for (const userIndexStr in distribution) {
+             const userIndex = parseInt(userIndexStr, 10);
+             const amountStr = distribution[userIndex];
+             const amount = ethers.parseUnits(amountStr, 18);
+             totalToDistribute += amount;
+        }
+
+        console.log(`Deployer needs ${ethers.formatUnits(totalToDistribute, 18)} ${symbol} to distribute. Has: ${ethers.formatUnits(deployerBalanceStart, 18)}`);
+
+        if (deployerBalanceStart < totalToDistribute) {
+             console.error(`Deployer has insufficient ${symbol} balance (${ethers.formatUnits(deployerBalanceStart, 18)}) to distribute ${ethers.formatUnits(totalToDistribute, 18)}. Skipping distribution for ${symbol}.`);
+             continue;
+        }
+
+        for (const userIndexStr in distribution) {
+            const userIndex = parseInt(userIndexStr, 10);
+            const targetUserAddress = USER_ADDRESSES[userIndex];
+            const amountStr = distribution[userIndex];
+            const amount = ethers.parseUnits(amountStr, 18);
+
+            if (amount === 0n) {
+                console.log(` - Skipping 0 amount for User ${userIndex} (${targetUserAddress.substring(0, 6)}...)`);
+                continue;
+            }
+
+            try {
+                console.log(` - Transferring ${amountStr} ${symbol} to User ${userIndex} (${targetUserAddress})...`);
+                const transferTx = await tokenInfo.contract.transfer(targetUserAddress, amount);
+                await transferTx.wait();
+                console.log(`   ✅ Transferred successfully.`);
+                successfulTransfers++;
+                await delay(1000); // Add delay
+            } catch (error: any) {
+                console.error(`   ❌ Error transferring ${amountStr} ${symbol} to User ${userIndex} (${targetUserAddress}): ${error.message}`);
+            }
+        }
+         await delay(500); // Small delay between properties
+    }
+
+    // --- Deposit Rent ---
+    console.log("\nDepositing rent (using deployer account)...");
     let rentDepositsCount = 0;
-    
-    for (const property of properties) {
-      try {
-        // Get the property token address
-        const tokenAddress = deployedAddresses.propertyTokens[property.name];
-        if (!tokenAddress) {
-          console.warn(`No token address found for ${property.name}, skipping rent deposit`);
-          continue;
-        }
-        
-        // Use USDC for rent payments
-        const threeMonthsRent = property.monthlyRent * BigInt(3);
-        
-        // First approve USDC transfer
-        await usdc.approve(rentDistribution.getAddress(), threeMonthsRent);
-        
-        // Then deposit rent using USDC with the new function signature
-        await (rentDistribution as any).depositRent(tokenAddress, threeMonthsRent);
-        rentDepositsCount++;
-        console.log(`Deposited 3 months of rent (${ethers.formatUnits(threeMonthsRent, 6)} USDC) for ${property.name}`);
-      } catch (error: any) {
-        console.warn(`Error depositing rent for ${property.name}: ${error.message}`);
-      }
-    }
-    
-    // Step 4: Create DAO proposals (only if DAO is deployed)
-    let createdProposalsCount = 0;
-    if (propertyDAO) {
-      console.log("\nCreating DAO proposals...");
-      
-      // Deployer creates a proposal
-      const firstPropertyName = Object.keys(propertyTokens)[0];
-      const firstPropertyToken = propertyTokens[firstPropertyName];
-      const firstPropertyTokenAddress = await firstPropertyToken.getAddress();
-      
-      if (firstPropertyToken) {
+    const usdcDecimals = 6n; // Standard USDC decimals = 6 (use BigInt notation 'n')
+     const deployerUsdcBalance = await usdc.balanceOf(deployer.address);
+     console.log(`Deployer USDC Balance: ${ethers.formatUnits(deployerUsdcBalance, usdcDecimals)}`);
+
+    for (const symbol in propertyTokens) {
+        const tokenInfo = propertyTokens[symbol];
+        const prop = properties.find(p => p.symbol === symbol)!;
+        const rentAmount = prop.monthlyRent * 2n; // Deposit 2 months' rent
+
+        console.log(`Depositing ${ethers.formatUnits(rentAmount, usdcDecimals)} USDC rent for ${symbol}...`);
+
         try {
-          // Check deployer's balance
-          const deployerBalance = await firstPropertyToken.balanceOf(deployer.address);
-          console.log(`Deployer's ${firstPropertyName} token balance: ${ethers.formatUnits(deployerBalance, 18)}`);
-          
-          // Create a proposal
-          const proposalDescription = `Increase monthly rent for ${firstPropertyName} by 5%`;
-          
-          // Mock function call data for the proposal
-          const mockCalldata = "0x";
-          const mockTarget = deployedAddresses.rentDistribution;
-          
-          // Try to create a proposal with the property token address
-          await (propertyDAO as any).createProposal(
-            proposalDescription,
-            mockTarget,
-            mockCalldata,
-            firstPropertyTokenAddress // Pass the relevant property token address
-          );
-          
-          createdProposalsCount++;
-          console.log(`Created proposal: "${proposalDescription}" for property ${firstPropertyTokenAddress}`);
+             // Check deployer's USDC balance
+             const currentDeployerUsdcBalance = await usdc.balanceOf(deployer.address);
+             if (currentDeployerUsdcBalance < rentAmount) {
+                 console.warn(`   ⚠️ Deployer has insufficient USDC (${ethers.formatUnits(currentDeployerUsdcBalance, usdcDecimals)}) to deposit ${ethers.formatUnits(rentAmount, usdcDecimals)} for ${symbol}. Skipping.`);
+                 continue;
+             }
+
+            // Approve RentDistribution contract to spend USDC
+            console.log(`   Approving RentDistribution contract (${await rentDistribution.getAddress()}) to spend ${ethers.formatUnits(rentAmount, usdcDecimals)} USDC...`);
+            const approveTx = await usdc.approve(await rentDistribution.getAddress(), rentAmount);
+            await approveTx.wait();
+            console.log(`   Approval successful.`);
+            await delay(1000); // Delay after approval
+
+            // Deposit rent
+            console.log(`   Depositing rent...`);
+            const depositTx = await rentDistribution.depositRent(tokenInfo.address, rentAmount);
+            await depositTx.wait();
+            console.log(`   ✅ Rent deposited successfully for ${symbol}.`);
+            rentDepositsCount++;
+            await delay(1000); // Delay after deposit
+
         } catch (error: any) {
-          console.warn(`Error creating proposal: ${error.message}`);
+            console.error(`   ❌ Error depositing rent for ${symbol}: ${error.message}`);
         }
-      }
+         await delay(500); // Small delay between properties
     }
-    
-    // Summary
+
+    // --- Prepare Marketplace Listings ---
+    console.log("\nPreparing Marketplace Listings (User actions required)...");
+    let listingsPrepared = 0;
+    let listingsCreatedByDeployer = 0;
+
+    const usdcDecimalsForListing = 6n; // Use hardcoded 6 for USDC
+
+    for (const scenario of LISTING_SCENARIOS) {
+        const { userIndex, propertySymbol, amount, pricePerTokenUsdc } = scenario;
+        const tokenInfo = propertyTokens[propertySymbol];
+        const listingAmount = ethers.parseUnits(amount, 18);
+        // Price per token needs to be formatted based on 18 decimals for PropertyToken and USDC decimals for price
+        const pricePerToken = ethers.parseUnits(pricePerTokenUsdc, Number(usdcDecimalsForListing)); // Price is in USDC units
+
+        if (!tokenInfo) {
+            console.warn(`Cannot prepare listing for ${propertySymbol}, token info not found.`);
+            continue;
+        }
+
+        const actorAddress = userIndex === -1 ? deployer.address : USER_ADDRESSES[userIndex];
+        const actorName = userIndex === -1 ? "Deployer" : `User ${userIndex}`;
+
+        console.log(`\nPreparing listing: ${actorName} lists ${amount} ${propertySymbol} at ${pricePerTokenUsdc} USDC/token.`);
+
+        try {
+            // Check actor's balance
+            const balance = await tokenInfo.contract.balanceOf(actorAddress);
+            console.log(` - ${actorName} balance of ${propertySymbol}: ${ethers.formatUnits(balance, 18)}`);
+
+            if (balance < listingAmount) {
+                console.warn(`   ⚠️ Insufficient balance for ${actorName} to list ${amount} ${propertySymbol}. Skipping.`);
+                continue;
+            }
+
+            // If deployer, execute the approval and listing
+            if (userIndex === -1) {
+                console.log(`   Executing listing creation for Deployer...`);
+                // Approve marketplace
+                console.log(`   Approving marketplace (${await propertyMarketplace.getAddress()}) for ${amount} ${propertySymbol}...`);
+                const approveTx = await tokenInfo.contract.connect(deployer).approve(await propertyMarketplace.getAddress(), listingAmount);
+                await approveTx.wait();
+                 console.log(`   Approval successful.`);
+                 await delay(1000);
+
+                // Create listing
+                 console.log(`   Creating listing...`);
+                const listTx = await propertyMarketplace.connect(deployer).createListing(
+                    tokenInfo.address,
+                    listingAmount,
+                    pricePerToken
+                );
+                const receipt = await listTx.wait();
+                 // Find ListingCreated event if possible to get listingId (optional)
+                 const listingCreatedEvent = receipt?.logs?.map(log => { try { return propertyMarketplace.interface.parseLog(log as any); } catch { return null; } }).find(event => event?.name === 'ListingCreated');
+                 const listingId = listingCreatedEvent?.args?.listingId;
+                console.log(`   ✅ Listing created successfully by Deployer (Listing ID: ${listingId ?? 'N/A'}).`);
+                listingsCreatedByDeployer++;
+                 await delay(1000);
+            } else {
+                // Log action required for other users
+                console.log(`   ➡️ ACTION REQUIRED for ${actorName} (${actorAddress}):`);
+                console.log(`      1. Approve Marketplace (${await propertyMarketplace.getAddress()}) to spend ${amount} ${propertySymbol} tokens (${tokenInfo.address}).`);
+                console.log(`      2. Call createListing on Marketplace (${await propertyMarketplace.getAddress()}) with:`);
+                console.log(`         - _propertyToken: ${tokenInfo.address}`);
+                console.log(`         - _tokenAmount: ${listingAmount.toString()}`);
+                console.log(`         - _pricePerToken: ${pricePerToken.toString()}`);
+                listingsPrepared++;
+            }
+        } catch (error: any) {
+            console.error(`   ❌ Error preparing/creating listing for ${propertySymbol} by ${actorName}: ${error.message}`);
+        }
+         await delay(500); // Delay between scenarios
+    }
+
+    // --- Prepare DAO Proposals ---
+    console.log("\nPreparing DAO Proposals (User actions required)...");
+    let proposalsPrepared = 0;
+    let proposalsCreatedByDeployer = 0;
+    const daoThreshold = await propertyDAO.proposalThreshold();
+     // Assuming the DAO uses the first property token (MBV) for initial governance checks if not specified differently
+     const primaryDaoGovTokenSymbol = properties[0].symbol; // e.g., MBV
+     const primaryDaoGovTokenAddress = propertyTokens[primaryDaoGovTokenSymbol].address;
+    console.log(`DAO Proposal Threshold: ${daoThreshold.toString()} basis points.`);
+
+
+    for (const scenario of PROPOSAL_SCENARIOS) {
+        const { userIndex, propertySymbol, description, targetContractKey, calldata } = scenario;
+        const tokenInfo = propertyTokens[propertySymbol]; // The token relevant TO THE PROPOSAL itself
+        const govTokenToCheck = propertyTokens[primaryDaoGovTokenSymbol].contract; // Token used for threshold check
+        const govTokenAddr = primaryDaoGovTokenAddress;
+
+
+        if (!tokenInfo) {
+            console.warn(`Cannot prepare proposal targeting ${propertySymbol}, token info not found.`);
+            continue;
+        }
+
+        const actorAddress = userIndex === -1 ? deployer.address : USER_ADDRESSES[userIndex];
+        const actorName = userIndex === -1 ? "Deployer" : `User ${userIndex}`;
+        const targetContractAddress = deployedAddresses[targetContractKey as keyof DeployedAddresses] || ethers.ZeroAddress; // Get address based on key
+
+        console.log(`\nPreparing proposal: "${description}" by ${actorName} targeting property ${propertySymbol}.`);
+        console.log(` - Target Contract (${targetContractKey}): ${targetContractAddress}`);
+        console.log(` - Governance Token for Threshold Check: ${primaryDaoGovTokenSymbol} (${govTokenAddr})`);
+
+
+        try {
+            // Check proposer's balance of the GOVERNANCE token
+            const balance = await govTokenToCheck.balanceOf(actorAddress);
+            const totalSupply = await govTokenToCheck.totalSupply();
+            console.log(` - ${actorName}'s Governance Token Balance (${primaryDaoGovTokenSymbol}): ${ethers.formatUnits(balance, 18)}`);
+            console.log(` - Total Supply of ${primaryDaoGovTokenSymbol}: ${ethers.formatUnits(totalSupply, 18)}`);
+
+
+            const hasEnoughTokens = totalSupply > 0n ? (balance * 10000n) / totalSupply >= daoThreshold : false;
+
+            if (!hasEnoughTokens) {
+                console.warn(`   ⚠️ Insufficient governance tokens for ${actorName} to create proposal. Needs >= ${daoThreshold.toString()} basis points. Skipping.`);
+                continue;
+            }
+             console.log(`   ✅ ${actorName} meets the proposal threshold.`);
+
+            // If deployer, execute the proposal creation
+            if (userIndex === -1) {
+                 console.log(`   Executing proposal creation for Deployer...`);
+                 try {
+                    const proposeTx = await propertyDAO.connect(deployer).createProposal(
+                        description,
+                        targetContractAddress,
+                        calldata,
+                        tokenInfo.address // The specific property token this proposal relates to
+                    );
+                    const receipt = await proposeTx.wait();
+                     const proposalCreatedEvent = receipt?.logs?.map(log => { try { return propertyDAO.interface.parseLog(log as any); } catch { return null; } }).find(event => event?.name === 'ProposalCreated');
+                     const proposalId = proposalCreatedEvent?.args?.proposalId;
+                    console.log(`   ✅ Proposal created successfully by Deployer (Proposal ID: ${proposalId ?? 'N/A'}).`);
+                    proposalsCreatedByDeployer++;
+                    await delay(1000);
+                 } catch(creationError: any) {
+                      console.error(`  ❌ Error during deployer's proposal creation tx: ${creationError.message}`);
+                 }
+            } else {
+                // Log action required for other users
+                console.log(`   ➡️ ACTION REQUIRED for ${actorName} (${actorAddress}):`);
+                console.log(`      Call createProposal on DAO (${await propertyDAO.getAddress()}) with:`);
+                console.log(`         - _description: "${description}"`);
+                console.log(`         - _targetContract: ${targetContractAddress}`);
+                console.log(`         - _functionCall: "${calldata}"`);
+                console.log(`         - _propertyTokenAddress: ${tokenInfo.address}`); // Crucial: address of the token the proposal is *about*
+                proposalsPrepared++;
+            }
+        } catch (error: any) {
+            console.error(`   ❌ Error preparing/creating proposal for ${propertySymbol} by ${actorName}: ${error.message}`);
+        }
+         await delay(500); // Delay between scenarios
+    }
+
+
+    // --- Summary ---
     console.log("\n--- Populate State Summary ---");
-    console.log(`Properties with tokens distributed: ${distributedTokenCount}`);
-    console.log(`Listings created: ${createdListingsCount}`);
-    console.log(`Rent deposits made: ${rentDepositsCount}`);
-    console.log(`DAO proposals created: ${createdProposalsCount}`);
+    console.log(`Deployer: ${deployer.address}`);
+    console.log(`Target Users: ${USER_ADDRESSES.join(', ')}`);
+    console.log(`Token Transfers Attempted/Successful: Check logs above (${successfulTransfers} successful transfers logged)`);
+    console.log(`Rent Deposits Successful: ${rentDepositsCount} / ${Object.keys(propertyTokens).length}`);
+    console.log(`Marketplace Listings Created by Deployer: ${listingsCreatedByDeployer}`);
+    console.log(`Marketplace Listings Prepared (Require User Action): ${listingsPrepared}`);
+    console.log(`DAO Proposals Created by Deployer: ${proposalsCreatedByDeployer}`);
+    console.log(`DAO Proposals Prepared (Require User Action): ${proposalsPrepared}`);
+    console.log("\n--- Manual Actions Required ---");
+    console.log("Review the 'ACTION REQUIRED' logs above for steps needed by test users:");
+    console.log(" - Users need to approve the Marketplace and call createListing for their prepared listings.");
+    console.log(" - Users need to call createProposal for their prepared proposals.");
+    console.log(" - Users may need USDC funds deposited to purchase from listings.");
+    console.log(" - Users can now test 'claimRent' for properties where rent was deposited.");
     console.log("-----------------------------");
-    
-  } catch (error) {
-    console.error("Error in populateState script:", error);
-  }
+    console.log("Script finished.");
+
 }
 
 main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error("Error in populateState script:", error);
+        process.exit(1);
+    });
