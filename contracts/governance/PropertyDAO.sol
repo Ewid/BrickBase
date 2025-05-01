@@ -46,6 +46,7 @@ contract PropertyDAO is Ownable {
     event ProposalThresholdUpdated(uint256 newThreshold);
     event VotingPeriodUpdated(uint256 newVotingPeriod);
     event ExecutionDelayUpdated(uint256 newExecutionDelay);
+    event ProposalVotingConcludedEarly(uint256 indexed proposalId, bool passed);
     
     constructor(
         address _propertyToken,
@@ -104,9 +105,18 @@ contract PropertyDAO is Ownable {
         require(block.timestamp < proposal.endTime, "Voting period ended");
         require(!hasVoted[_proposalId][msg.sender], "Already voted");
         
-        uint256 votes = propertyToken.balanceOf(msg.sender);
-        require(votes > 0, "No voting power");
+        // Get the specific token address for THIS proposal
+        address specificTokenAddress = proposal.propertyTokenAddress;
+        require(specificTokenAddress != address(0), "Invalid proposal token address");
+
+        // Create an IERC20 instance for the specific token
+        IERC20 specificToken = IERC20(specificTokenAddress);
+
+        // Calculate votes based on the balance of the SPECIFIC token
+        uint256 votes = specificToken.balanceOf(msg.sender);
         
+        require(votes > 0, "No voting power for this specific token");
+
         if (_support) {
             proposal.votesFor += votes;
         } else {
@@ -116,6 +126,23 @@ contract PropertyDAO is Ownable {
         hasVoted[_proposalId][msg.sender] = true;
         
         emit Voted(_proposalId, msg.sender, _support, votes);
+
+        // Short-circuit logic
+        IERC20 propertyTokenForSupply = IERC20(proposal.propertyTokenAddress);
+        uint256 totalSupply = propertyTokenForSupply.totalSupply();
+        uint256 halfSupply = totalSupply / 2;
+
+        if (block.timestamp < proposal.endTime) { // Only conclude early if voting is still active
+             if (proposal.votesFor > halfSupply) {
+                 proposal.endTime = block.timestamp; // End voting immediately
+                 proposal.passed = true;
+                 emit ProposalVotingConcludedEarly(_proposalId, true);
+             } else if (proposal.votesAgainst > halfSupply) {
+                 proposal.endTime = block.timestamp; // End voting immediately
+                 proposal.passed = false; // Explicitly set passed to false
+                 emit ProposalVotingConcludedEarly(_proposalId, false);
+             }
+        }
     }
     
     // Execute a passed proposal
@@ -180,7 +207,12 @@ contract PropertyDAO is Ownable {
         } else if (block.timestamp < proposal.endTime) {
             return "Active";
         } else if (block.timestamp < proposal.endTime + executionDelay) {
-            return "Pending";
+            // Check result here as voting has ended but not yet executable
+            if (proposal.votesFor > proposal.votesAgainst) {
+                return "Pending"; // Passed, waiting for execution delay
+            } else {
+                return "Rejected"; // Failed, voting ended
+            }
         } else {
             if (proposal.votesFor > proposal.votesAgainst) {
                 return "Ready";
