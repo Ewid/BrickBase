@@ -21,8 +21,8 @@ contract PropertyDAO is Ownable {
         bool passed;
     }
     
-    // Property token that determines voting power
-    IERC20 public propertyToken;
+    // Property token that determines voting power - NO LONGER USED FOR PROPOSAL THRESHOLD CHECK
+    // IERC20 public propertyToken; // Commented out or remove if not used elsewhere
     
     // Minimum ownership percentage required to create a proposal (in basis points, e.g., 500 = 5%)
     uint256 public proposalThreshold;
@@ -55,7 +55,7 @@ contract PropertyDAO is Ownable {
         uint256 _executionDelay,
         address initialOwner
     ) Ownable(initialOwner) {
-        propertyToken = IERC20(_propertyToken);
+        // propertyToken = IERC20(_propertyToken);
         proposalThreshold = _proposalThreshold;
         votingPeriod = _votingPeriod;
         executionDelay = _executionDelay;
@@ -66,15 +66,24 @@ contract PropertyDAO is Ownable {
         string memory _description,
         address _targetContract,
         bytes memory _functionCall,
-        address _propertyTokenAddress // Address of the relevant property token
+        address _propertyTokenAddress // Address for the specific property
     ) external returns (uint256) {
-        uint256 proposerBalance = propertyToken.balanceOf(msg.sender);
-        uint256 totalSupply = propertyToken.totalSupply();
-        
-        // Check if proposer meets the threshold requirement
-        require((proposerBalance * 10000) / totalSupply >= proposalThreshold, "Insufficient tokens to propose");
-        // Check if the provided property token address is valid (optional, but good practice)
+        // Check if the provided property token address is valid
         require(_propertyTokenAddress != address(0), "Invalid property token address");
+
+        // Create an IERC20 instance for the SPECIFIC property token
+        IERC20 specificToken = IERC20(_propertyTokenAddress);
+
+        // Get balance and total supply of the SPECIFIC token
+        uint256 proposerBalance = specificToken.balanceOf(msg.sender);
+        uint256 totalSupply = specificToken.totalSupply();
+
+        // Check if total supply is greater than 0 to avoid division by zero
+        require(totalSupply > 0, "Token total supply is zero");
+
+        // Perform threshold check against the SPECIFIC token's supply
+        // Note: proposalThreshold is stored as basis points (e.g., 1000 = 10%)
+        require((proposerBalance * 10000) / totalSupply >= proposalThreshold, "Insufficient tokens of this property to propose");
         
         uint256 proposalId = proposals.length;
         
