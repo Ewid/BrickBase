@@ -25,7 +25,12 @@ const addresses: ContractAddresses = {
   "MBVToken": process.env.MBV_TOKEN_ADDRESS || "0x55E6e92C51B7E9d94a90dB539B0636a7BB713325",
   "MLCToken": process.env.MLC_TOKEN_ADDRESS || "0x13690b78E6d8C40019ce71e7902AFdB1d287Ff47",
   "SFMTToken": process.env.SFMT_TOKEN_ADDRESS || "0xA06C5216a8a0Bf26a7E09c47e2211215a058a3d5",
-  "CDPToken": process.env.CDP_TOKEN_ADDRESS || "0x1038Da4f080Df159e9bdc6b47d6268B060d0586C"
+  "CDPToken": process.env.CDP_TOKEN_ADDRESS || "0x1038Da4f080Df159e9bdc6b47d6268B060d0586C",
+  "EwidaToken": process.env.EWID_TOKEN_ADDRESS || "0x1038Da4f080Df159e9bdc6b47d6268B060d0586C",
+  "IconicToken": process.env.ICON_TOKEN_ADDRESS || "0x1038Da4f080Df159e9bdc6b47d6268B060d0586C",
+  "PyramidsToken": process.env.PYR_TOKEN_ADDRESS || "0x1038Da4f080Df159e9bdc6b47d6268B060d0586C",
+  "OraToken": process.env.ORA_TOKEN_ADDRESS || "0x1038Da4f080Df159e9bdc6b47d6268B060d0586C",
+  "SouthMedToken": process.env.SMV_TOKEN_ADDRESS || "0x1038Da4f080Df159e9bdc6b47d6268B060d0586C"
 };
 
 // Get owner address from .env
@@ -52,7 +57,12 @@ const args: ContractArgs = {
   "MBVToken": ["Miami Beachfront Villa", "MBV", "2500000000000", "10000000000000000000000", ownerAddress],
   "MLCToken": ["Manhattan Luxury Condo", "MLC", "3200000000000", "10000000000000000000000", ownerAddress],
   "SFMTToken": ["San Francisco Modern Townhouse", "SFMT", "3800000000000", "10000000000000000000000", ownerAddress],
-  "CDPToken": ["Chicago Downtown Penthouse", "CDP", "4200000000000", "10000000000000000000000", ownerAddress]
+  "CDPToken": ["Chicago Downtown Penthouse", "CDP", "4200000000000", "10000000000000000000000", ownerAddress],
+  "EwidaToken": ["Ewidas Workspace", "EWID", "1000000000000", "10000000000000000000000", ownerAddress],
+  "IconicToken": ["Iconic Tower", "ICON", "1000000000000", "10000000000000000000000", ownerAddress],
+  "PyramidsToken": ["Pyramids Hotel", "PYR", "1000000000000", "10000000000000000000000", ownerAddress],
+  "OraToken": ["Ora SilverSands", "ORA", "1000000000000", "10000000000000000000000", ownerAddress],
+  "SouthMedToken": ["SouthMed Villa", "SMV", "1000000000000", "10000000000000000000000", ownerAddress]
 };
 
 async function main() {

@@ -1,5 +1,4 @@
-// scripts/populateState.ts
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import {
     PropertyToken,
     PropertyNFT,
@@ -7,8 +6,8 @@ import {
     RentDistribution,
     PropertyMarketplace,
     PropertyDAO,
-    PropertyTokenFactory, // Added Factory type
-    IERC20 // Keep IERC20 for USDC
+    PropertyTokenFactory,
+    IERC20
 } from "../typechain-types";
 import * as dotenv from "dotenv";
 import path from "path";
@@ -18,68 +17,55 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 // --- Configuration ---
 
 const USER_ADDRESSES = [
-    "0xa83126A279960797233d48488e5908d6C1E72f2F",
-    "0xcd64902df08575Df5F3499CdA6F14154fB48E362",
-    "0x61210F2D208BaDF9101d91890C91EEC186707446",
-    "0xdC6Ce97a7EB152D2f64Ae98512d3126601b74560"
+    "0xa83126A279960797233d48488e5908d6C1E72f2F", // User 0
+    "0xcd64902df08575Df5F3499CdA6F14154fB48E362", // User 1
+    "0x61210F2D208BaDF9101d91890C91EEC186707446", // User 2
+    "0xdC6Ce97a7EB152D2f64Ae98512d3126601b74560"  // User 3
 ];
 
-// Define desired token distribution (Property Symbol -> User Index -> Amount (as string for parseUnits))
-// Make sure the total distributed per property doesn't exceed the total supply (10000)
+// Expected properties from deployAll.ts - MUST MATCH SYMBOLS AND COUNT
+const EXPECTED_PROPERTY_SYMBOLS = ["MBV", "MLC", "SFMT", "CDP", "EWID", "ICON", "PYR", "ORA", "SMV"];
+
 const TOKEN_DISTRIBUTION_PLAN: { [propertySymbol: string]: { [userIndex: number]: string } } = {
-    "MBV": { // Miami
-        0: "3000", // User A gets 3000
-        1: "0",  // User B gets 500
-        2: "1500", // User C gets 1000
-        3: "200"   // User D gets 200
-        // Deployer keeps remaining ~5300
-    },
-    "MLC": { // Manhattan
-        0: "1000",
-        1: "2500",
-        2: "1000",
-        3: "0"     // User D gets none
-        // Deployer keeps remaining ~5500
-    },
-    "SFMT": { // San Francisco
-        0: "500",
-        1: "2500",
-        2: "2000",
-        3: "500"
-        // Deployer keeps remaining ~4500
-    },
-    "CDP": { // Chicago
-        0: "200",
-        1: "4500",
-        2: "1000",
-        3: "0"
-        // Deployer keeps remaining ~4300
-    }
+    // User 0: Strong MBV, EWID. Medium SFMT, PYR.
+    // User 1: Strong MLC, ICON. Medium CDP.
+    // User 2: Strong SFMT, ORA. Medium MBV, SMV.
+    // User 3: Strong CDP, PYR. Medium EWID.
+    // Deployer keeps the rest. All sums should be < 10000.
+    "MBV":  { 0: "4000", 2: "1500", /*Deployer: 4500*/ },
+    "MLC":  { 1: "5000", /*Deployer: 5000*/ },
+    "SFMT": { 0: "1000", 1: "500",  2: "4000", /*Deployer: 4500*/ },
+    "CDP":  { 1: "2000", 3: "4500", /*Deployer: 3500*/ },
+    "EWID": { 0: "3500", 3: "1500", /*Deployer: 5000*/ },
+    "ICON": { 1: "4000", 2: "1000", /*Deployer: 5000*/ },
+    "PYR":  { 0: "500",  3: "3000", /*Deployer: 6500*/ },
+    "ORA":  { 2: "5500", /*Deployer: 4500*/ },
+    "SMV":  { 2: "2000", 3: "500", /*Deployer: 7500*/ }
 };
 
-// Define marketplace listing scenarios (who lists what) - REDUCED PRICES
 const LISTING_SCENARIOS = [
-    { userIndex: 0, propertySymbol: "MBV", amount: "500", pricePerTokenUsdc: "0.10" }, // User A lists Miami tokens ($0.10/token)
-    { userIndex: 1, propertySymbol: "MLC", amount: "300", pricePerTokenUsdc: "0.15" }, // User B lists Manhattan ($0.15/token)
-    { userIndex: 2, propertySymbol: "SFMT", amount: "1000", pricePerTokenUsdc: "0.20" }, // User C lists San Fran ($0.20/token)
-    { userIndex: 1, propertySymbol: "CDP", amount: "250", pricePerTokenUsdc: "0.22" }, // User B lists Chicago ($0.22/token)
-    // Deployer also lists some
-    { userIndex: -1, propertySymbol: "MBV", amount: "1000", pricePerTokenUsdc: "0.09" }, // -1 indicates deployer ($0.09/token)
-    { userIndex: -1, propertySymbol: "CDP", amount: "500", pricePerTokenUsdc: "0.21" }  // ($0.21/token)
+    // User listings
+    { userIndex: 0, propertySymbol: "MBV", amount: "500", pricePerTokenUsdc: "0.02" },  // User 0 lists MBV
+    { userIndex: 1, propertySymbol: "MLC", amount: "300", pricePerTokenUsdc: "0.03" },  // User 1 lists MLC
+    { userIndex: 2, propertySymbol: "SFMT", amount: "1000", pricePerTokenUsdc: "0.02" },// User 2 lists SFMT
+    { userIndex: 3, propertySymbol: "CDP", amount: "200", pricePerTokenUsdc: "0.04" },  // User 3 lists CDP
+    { userIndex: 0, propertySymbol: "EWID", amount: "100", pricePerTokenUsdc: "0.01" }, // User 0 lists EWID
+
+    // Deployer listings (competitive pricing)
+    { userIndex: -1, propertySymbol: "MBV", amount: "1000", pricePerTokenUsdc: "0.015" },
+    { userIndex: -1, propertySymbol: "ICON", amount: "500", pricePerTokenUsdc: "0.025" },
+    { userIndex: -1, propertySymbol: "ORA", amount: "800", pricePerTokenUsdc: "0.01" },
 ];
 
-// Define DAO proposal scenarios
-const PROPOSAL_SCENARIOS = [
-    { userIndex: 0, propertySymbol: "MBV", description: "Proposal 1 (MBV): Reduce management fee by 0.5%", targetContractKey: "rentDistribution", calldata: "0x" }, // User A proposes for Miami
-    { userIndex: 1, propertySymbol: "CDP", description: "Proposal 2 (CDP): Special assessment for lobby renovation - 1000 USDC", targetContractKey: "rentDistribution", calldata: "0x" }, // User B proposes for Chicago
-    { userIndex: 2, propertySymbol: "SFMT", description: "Proposal 3 (SFMT): Approve new insurance provider", targetContractKey: "propertyRegistry", calldata: "0x" }, // User C proposes for SF
-    { userIndex: -1, propertySymbol: "MBV", description: "Proposal 4 (MBV): Increase reserve fund allocation", targetContractKey: "rentDistribution", calldata: "0x" },
-];
+// Rent configuration: monthly USDC rent per property (total, not per token)
+const PROPERTY_RENT_CONFIG: { [propertySymbol: string]: string } = {
+    "MBV": "0.20", "MLC": "0.25", "SFMT": "0.30", "CDP": "0.22", "EWID": "0.10",
+    "ICON": "0.15", "PYR": "0.12", "ORA": "0.18", "SMV": "0.16"
+};
+
 
 // --- End Configuration ---
 
-
-// Get deployed contract addresses from environment variables
 interface DeployedAddresses {
     propertyTokenFactory: string;
     propertyNFT: string;
@@ -88,10 +74,8 @@ interface DeployedAddresses {
     propertyMarketplace: string;
     propertyDAO: string;
     usdcToken: string;
-    // We will fetch property token addresses dynamically
 }
 
-// Populate with your deployed contract addresses or use .env
 const deployedAddresses: DeployedAddresses = {
     propertyTokenFactory: process.env.PROPERTY_TOKEN_FACTORY_ADDRESS!,
     propertyNFT: process.env.PROPERTY_NFT_ADDRESS!,
@@ -102,33 +86,28 @@ const deployedAddresses: DeployedAddresses = {
     usdcToken: process.env.USDC_TOKEN_ADDRESS!
 };
 
-// Property details (used for identifying tokens, supply, and rent) - REDUCED RENT
-const properties = [
-    { name: "Miami Beachfront Villa", symbol: "MBV", supply: 10000, monthlyRent: ethers.parseUnits("0.5", 6) },   // $0.50/month
-    { name: "Manhattan Luxury Condo", symbol: "MLC", supply: 10000, monthlyRent: ethers.parseUnits("0.75", 6) }, // $0.75/month
-    { name: "San Francisco Modern Townhouse", symbol: "SFMT", supply: 10000, monthlyRent: ethers.parseUnits("0.90", 6) },// $0.90/month
-    { name: "Chicago Downtown Penthouse", symbol: "CDP", supply: 10000, monthlyRent: ethers.parseUnits("1.0", 6) }    // $1.00/month
-];
+interface PropertyTokenInfo {
+    address: string;
+    contract: PropertyToken;
+    name: string;
+    symbol: string;
+}
+const propertyTokens: { [symbol: string]: PropertyTokenInfo } = {};
 
-// Function to add delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const USDC_DECIMALS = 6n; // Using BigInt for clarity
 
 async function main() {
+    console.log("\n--- BrickBase Expo State Population Script ---");
+    console.log(`Running on network: ${network.name}`);
     const [deployer] = await ethers.getSigners();
-    console.log("--- Starting Populate State Script ---");
-    console.log("Using deployer address:", deployer.address);
-    console.log("Target User Addresses:", USER_ADDRESSES);
+    console.log(`Deployer account: ${deployer.address}`);
 
-    // Validate essential addresses are present
-    for (const [key, value] of Object.entries(deployedAddresses)) {
-        if (!value) {
-            throw new Error(`Missing address for ${key} in environment variables or config.`);
-        }
-        console.log(`Using ${key}: ${value}`);
+    if (Object.values(deployedAddresses).some(addr => !addr)) {
+        throw new Error("One or more contract addresses are missing in .env. Please deploy first and update .env.");
     }
 
-    // --- Connect to Deployed Contracts ---
-    console.log("\nConnecting to deployed contracts...");
+    // Get contract instances
     const propertyTokenFactory = await ethers.getContractAt("PropertyTokenFactory", deployedAddresses.propertyTokenFactory) as PropertyTokenFactory;
     const propertyNFT = await ethers.getContractAt("PropertyNFT", deployedAddresses.propertyNFT) as PropertyNFT;
     const propertyRegistry = await ethers.getContractAt("PropertyRegistry", deployedAddresses.propertyRegistry) as PropertyRegistry;
@@ -136,387 +115,329 @@ async function main() {
     const propertyMarketplace = await ethers.getContractAt("PropertyMarketplace", deployedAddresses.propertyMarketplace) as PropertyMarketplace;
     const propertyDAO = await ethers.getContractAt("PropertyDAO", deployedAddresses.propertyDAO) as PropertyDAO;
     const usdc = await ethers.getContractAt("IERC20", deployedAddresses.usdcToken) as IERC20;
-    console.log("Successfully connected to core contracts.");
 
-    // --- Fetch Property Token Addresses Dynamically ---
     console.log("\nFetching Property Token addresses from Factory...");
     const fetchedTokenAddresses = await propertyTokenFactory.getAllTokens();
-    const propertyTokens: { [symbol: string]: { address: string, contract: PropertyToken, name: string } } = {};
 
-    if (fetchedTokenAddresses.length !== properties.length) {
-        console.warn(`Mismatch: Factory has ${fetchedTokenAddresses.length} tokens, expected ${properties.length}. Check deployment.`);
-        // Attempt to match by order, assuming deployment order matches `properties` array
-        for (let i = 0; i < Math.min(fetchedTokenAddresses.length, properties.length); i++) {
-            const prop = properties[i];
-            const address = fetchedTokenAddresses[i];
-            propertyTokens[prop.symbol] = {
-                address: address,
-                contract: await ethers.getContractAt("PropertyToken", address) as PropertyToken,
-                name: prop.name
-            };
-            console.log(`Fetched ${prop.symbol} (${prop.name}): ${address}`);
-        }
-    } else {
-        // Assuming order matches properties array
-         for (let i = 0; i < properties.length; i++) {
-            const prop = properties[i];
-            const address = fetchedTokenAddresses[i];
-            propertyTokens[prop.symbol] = {
-                address: address,
-                contract: await ethers.getContractAt("PropertyToken", address) as PropertyToken,
-                name: prop.name
-            };
-            console.log(`Fetched ${prop.symbol} (${prop.name}): ${address}`);
-        }
-    }
-     if (Object.keys(propertyTokens).length === 0) {
-        throw new Error("Could not fetch any property token addresses from the factory. Ensure tokens were created.");
+    if (fetchedTokenAddresses.length !== EXPECTED_PROPERTY_SYMBOLS.length) {
+        console.error(`CRITICAL: Factory has ${fetchedTokenAddresses.length} tokens, but deployAll.ts should have deployed ${EXPECTED_PROPERTY_SYMBOLS.length}.`);
+        console.error("Please ensure deployAll.ts successfully created all property tokens and that PROPERTY_TOKEN_FACTORY_ADDRESS in .env is correct.");
+        throw new Error("Property token count mismatch.");
     }
 
+    for (let i = 0; i < EXPECTED_PROPERTY_SYMBOLS.length; i++) {
+        const symbol = EXPECTED_PROPERTY_SYMBOLS[i];
+        const address = fetchedTokenAddresses[i];
+        const tempContract = await ethers.getContractAt("PropertyToken", address) as PropertyToken;
+        const name = await tempContract.name(); // Fetch name from contract
+        propertyTokens[symbol] = { address, contract: tempContract, name, symbol };
+        console.log(`Fetched ${symbol} (${name}): ${address}`);
+    }
+    await delay(500);
 
-    // --- Verify NFT Minting & Registration (Optional Check) ---
-    console.log("\nVerifying NFT and Registry status (optional)...");
-    for (let i = 0; i < properties.length; i++) {
-        const prop = properties[i];
-        const tokenInfo = propertyTokens[prop.symbol];
-        if (!tokenInfo) {
-            console.warn(`Skipping verification for ${prop.name}, token address not found.`);
-            continue;
-        }
+    console.log("\nVerifying NFT and Registry status...");
+    for (let i = 0; i < EXPECTED_PROPERTY_SYMBOLS.length; i++) {
+        const symbol = EXPECTED_PROPERTY_SYMBOLS[i];
+        const tokenInfo = propertyTokens[symbol];
         try {
-            const owner = await propertyNFT.ownerOf(i);
-            const registeredToken = await propertyRegistry.getPropertyToken(deployedAddresses.propertyNFT, i);
-            console.log(`NFT ${i} (${prop.name}): Owner ${owner}, Registered Token ${registeredToken} (Expected: ${tokenInfo.address})`);
-            if (registeredToken.toLowerCase() !== tokenInfo.address.toLowerCase()) {
-                console.warn(`Registry mismatch for NFT ${i}! Expected ${tokenInfo.address}, got ${registeredToken}. Consider re-registering.`);
-                // Optional: Add re-registration logic here if needed
-                // console.log(`Attempting to re-register NFT ${i}...`);
-                // const registerTx = await (propertyRegistry as any)["registerProperty(address,uint256,address)"](
-                //     deployedAddresses.propertyNFT,
-                //     BigInt(i),
-                //     tokenInfo.address
-                // );
-                // await registerTx.wait();
-                // console.log(`Re-registration complete for NFT ${i}.`);
-                // await delay(1000); // Add delay after transaction
+            const nftOwner = await propertyNFT.ownerOf(i);
+            const registeredTokenData = await propertyRegistry.registeredProperties(i); // Fetch by index
+            const registeredTokenAddress = registeredTokenData.propertyToken;
+
+            console.log(`NFT ${i} (${tokenInfo.name}): Owner ${nftOwner}, Registered PropertyToken ${registeredTokenAddress}`);
+            if (registeredTokenAddress.toLowerCase() !== tokenInfo.address.toLowerCase()) {
+                console.warn(`  Registry mismatch for NFT ${i}! Expected ${tokenInfo.address}, got ${registeredTokenAddress}. This might cause issues.`);
             }
         } catch (error: any) {
-            console.warn(`Could not verify NFT ${i} (${prop.name}): ${error.message}. Was it minted and registered?`);
+            console.error(`  Error verifying NFT ${i} (${tokenInfo.name}): ${error.message}`);
         }
-         await delay(500); // Small delay between reads
+        await delay(200);
     }
 
-    // --- Ensure Deployer has Initial Tokens ---
-    console.log("\nEnsuring deployer has initial tokens...");
-    for (const symbol in propertyTokens) {
+    console.log("\nDistributing Property Tokens...");
+    for (const symbol of EXPECTED_PROPERTY_SYMBOLS) {
         const tokenInfo = propertyTokens[symbol];
-        try {
-            const deployerBalance = await tokenInfo.contract.balanceOf(deployer.address);
-            const totalSupply = await tokenInfo.contract.totalSupply(); // Fetch total supply for context
-            const expectedTotalSupply = ethers.parseUnits(properties.find(p => p.symbol === symbol)!.supply.toString(), 18);
-
-            console.log(`Deployer balance for ${symbol}: ${ethers.formatUnits(deployerBalance, 18)} / ${ethers.formatUnits(expectedTotalSupply, 18)}`);
-
-            // Mint only if balance is zero and total supply is less than expected (indicating incomplete initial mint)
-             if (deployerBalance === 0n && totalSupply < expectedTotalSupply) {
-                const amountToMint = expectedTotalSupply - totalSupply;
-                if (amountToMint > 0n) {
-                    console.log(`Minting initial ${ethers.formatUnits(amountToMint, 18)} ${symbol} tokens to deployer ${deployer.address}...`);
-                    const mintTx = await tokenInfo.contract.mint(deployer.address, amountToMint);
-                    await mintTx.wait();
-                    console.log(`Minted ${symbol} tokens.`);
-                    await delay(1000); // Add delay after transaction
-                }
-             } else if (deployerBalance < expectedTotalSupply && deployerBalance > 0n) {
-                 console.log(`Deployer already has some ${symbol} tokens, assuming initial mint occurred.`);
-             } else if (deployerBalance.toString() === expectedTotalSupply.toString()){
-                 console.log(`Deployer holds the total supply for ${symbol}.`);
-             }
-        } catch (error: any) {
-            console.error(`Error checking/minting for ${symbol}: ${error.message}`);
-        }
-         await delay(500); // Small delay between reads/writes
-    }
-
-    // --- Distribute Tokens to Users ---
-    console.log("\nDistributing tokens to users...");
-    let successfulTransfers = 0;
-    for (const symbol in TOKEN_DISTRIBUTION_PLAN) {
-        const distribution = TOKEN_DISTRIBUTION_PLAN[symbol];
-        const tokenInfo = propertyTokens[symbol];
-        if (!tokenInfo) {
-            console.warn(`Cannot distribute ${symbol} tokens, address not found.`);
+        const distributionPlan = TOKEN_DISTRIBUTION_PLAN[symbol];
+        if (!tokenInfo || !distributionPlan) {
+            console.warn(`Skipping distribution for ${symbol}, no plan or token info.`);
             continue;
         }
+        console.log(`Distributing ${tokenInfo.name} (${symbol})...`);
+        const deployerBalanceInitial = await tokenInfo.contract.balanceOf(deployer.address);
+        console.log(`  Deployer initial balance: ${ethers.formatUnits(deployerBalanceInitial, 18)} ${symbol}`);
 
-        console.log(`Distributing ${symbol} (${tokenInfo.name})...`);
-        const deployerBalanceStart = await tokenInfo.contract.balanceOf(deployer.address);
-        let totalToDistribute = 0n;
-
-        for (const userIndexStr in distribution) {
-             const userIndex = parseInt(userIndexStr, 10);
-             const amountStr = distribution[userIndex];
-             const amount = ethers.parseUnits(amountStr, 18);
-             totalToDistribute += amount;
-        }
-
-        console.log(`Deployer needs ${ethers.formatUnits(totalToDistribute, 18)} ${symbol} to distribute. Has: ${ethers.formatUnits(deployerBalanceStart, 18)}`);
-
-        if (deployerBalanceStart < totalToDistribute) {
-             console.error(`Deployer has insufficient ${symbol} balance (${ethers.formatUnits(deployerBalanceStart, 18)}) to distribute ${ethers.formatUnits(totalToDistribute, 18)}. Skipping distribution for ${symbol}.`);
-             continue;
-        }
-
-        for (const userIndexStr in distribution) {
-            const userIndex = parseInt(userIndexStr, 10);
-            const targetUserAddress = USER_ADDRESSES[userIndex];
-            const amountStr = distribution[userIndex];
+        for (const userIndexStr in distributionPlan) {
+            const userIndex = parseInt(userIndexStr);
+            const amountStr = distributionPlan[userIndex];
             const amount = ethers.parseUnits(amountStr, 18);
+            const targetUserAddress = USER_ADDRESSES[userIndex];
 
-            if (amount === 0n) {
-                console.log(` - Skipping 0 amount for User ${userIndex} (${targetUserAddress.substring(0, 6)}...)`);
+            if (amount === 0n) continue;
+
+            if (deployerBalanceInitial < amount) {
+                 console.warn(`  Deployer has insufficient ${symbol} (${ethers.formatUnits(deployerBalanceInitial, 18)}) to send ${amountStr} to User ${userIndex}. Check deployAll.ts minting.`);
+                 // As a fallback, try to mint to deployer if total supply allows. This assumes deployer has minting rights.
+                 // This is risky and ideally deployAll.ts handles initial supply correctly.
+                 try {
+                    const totalSupply = await tokenInfo.contract.totalSupply();
+                    const maxSupply = ethers.parseUnits("10000", 18); // Assuming 10k max
+                    if (totalSupply < maxSupply) {
+                        const needed = amount - deployerBalanceInitial;
+                        const canMint = maxSupply - totalSupply;
+                        const toMint = needed < canMint ? needed : canMint;
+                        if (toMint > 0n) {
+                            console.log(`  Attempting to mint ${ethers.formatUnits(toMint, 18)} ${symbol} to deployer as fallback...`);
+                            await (tokenInfo.contract.connect(deployer) as any).mint(deployer.address, toMint); // Cast to any if mint is not in standard IERC20 via Typechain
+                            await delay(1000);
+                             console.log(`  Fallback mint successful for deployer. Retrying transfer.`);
+                        }
+                    }
+                 } catch (e:any) { console.error(`  Fallback mint failed for ${symbol}: ${e.message}`); }
+            }
+            
+            const currentDeployerBalance = await tokenInfo.contract.balanceOf(deployer.address);
+            if (currentDeployerBalance >= amount) {
+                try {
+                    console.log(`  Sending ${amountStr} ${symbol} to User ${userIndex} (${targetUserAddress.substring(0,6)})...`);
+                    await tokenInfo.contract.connect(deployer).transfer(targetUserAddress, amount);
+                    console.log(`    ✅ Transferred.`);
+                    await delay(1000);
+                } catch (e: any) {
+                    console.error(`    ❌ Failed to transfer ${symbol} to User ${userIndex}: ${e.message}`);
+                }
+            } else {
+                 console.warn(`  Still insufficient ${symbol} for User ${userIndex} after potential fallback mint. Skipping.`);
+            }
+        }
+    }
+    await delay(500);
+
+    console.log("\nDepositing Rent (2 months worth)...");
+    const deployerUsdcInitial = await usdc.balanceOf(deployer.address);
+    console.log(`Deployer initial USDC: ${ethers.formatUnits(deployerUsdcInitial, USDC_DECIMALS)}`);
+
+    for (const symbol of EXPECTED_PROPERTY_SYMBOLS) {
+        const tokenInfo = propertyTokens[symbol];
+        const rentStr = PROPERTY_RENT_CONFIG[symbol];
+        if (!tokenInfo || !rentStr) {
+            console.warn(`Skipping rent deposit for ${symbol}, no config or token info.`);
+            continue;
+        }
+        const monthlyRent = ethers.parseUnits(rentStr, Number(USDC_DECIMALS));
+        const rentToDeposit = monthlyRent * 2n; // 2 months
+
+        console.log(`Depositing ${ethers.formatUnits(rentToDeposit, USDC_DECIMALS)} USDC for ${tokenInfo.name} (${symbol})...`);
+        try {
+            const currentUsdc = await usdc.balanceOf(deployer.address);
+            if (currentUsdc < rentToDeposit) {
+                console.error(`  ❌ Deployer has insufficient USDC (${ethers.formatUnits(currentUsdc, USDC_DECIMALS)}) to deposit for ${symbol}. Need ${ethers.formatUnits(rentToDeposit, USDC_DECIMALS)}.`);
                 continue;
             }
-
-            try {
-                console.log(` - Transferring ${amountStr} ${symbol} to User ${userIndex} (${targetUserAddress})...`);
-                const transferTx = await tokenInfo.contract.transfer(targetUserAddress, amount);
-                await transferTx.wait();
-                console.log(`   ✅ Transferred successfully.`);
-                successfulTransfers++;
-                await delay(1000); // Add delay
-            } catch (error: any) {
-                console.error(`   ❌ Error transferring ${amountStr} ${symbol} to User ${userIndex} (${targetUserAddress}): ${error.message}`);
-            }
+            await usdc.connect(deployer).approve(deployedAddresses.rentDistribution, rentToDeposit);
+            await delay(1000);
+            await rentDistribution.connect(deployer).depositRent(tokenInfo.address, rentToDeposit);
+            console.log(`  ✅ Rent deposited for ${symbol}.`);
+            await delay(1000);
+        } catch (e: any) {
+            console.error(`  ❌ Failed to deposit rent for ${symbol}: ${e.message}`);
         }
-         await delay(500); // Small delay between properties
     }
+    await delay(500);
 
-    // --- Deposit Rent ---
-    console.log("\nDepositing rent (using deployer account)...");
-    let rentDepositsCount = 0;
-    const usdcDecimals = 6n; // Standard USDC decimals = 6 (use BigInt notation 'n')
-     const deployerUsdcBalance = await usdc.balanceOf(deployer.address);
-     console.log(`Deployer USDC Balance: ${ethers.formatUnits(deployerUsdcBalance, usdcDecimals)}`);
-
-    for (const symbol in propertyTokens) {
-        const tokenInfo = propertyTokens[symbol];
-        const prop = properties.find(p => p.symbol === symbol)!;
-        const rentAmount = prop.monthlyRent * 2n; // Deposit 2 months' rent
-
-        console.log(`Depositing ${ethers.formatUnits(rentAmount, usdcDecimals)} USDC rent for ${symbol}...`);
-
-        try {
-             // Check deployer's USDC balance
-             const currentDeployerUsdcBalance = await usdc.balanceOf(deployer.address);
-             if (currentDeployerUsdcBalance < rentAmount) {
-                 console.warn(`   ⚠️ Deployer has insufficient USDC (${ethers.formatUnits(currentDeployerUsdcBalance, usdcDecimals)}) to deposit ${ethers.formatUnits(rentAmount, usdcDecimals)} for ${symbol}. Skipping.`);
-                 continue;
-             }
-
-            // Approve RentDistribution contract to spend USDC
-            console.log(`   Approving RentDistribution contract (${await rentDistribution.getAddress()}) to spend ${ethers.formatUnits(rentAmount, usdcDecimals)} USDC...`);
-            const approveTx = await usdc.approve(await rentDistribution.getAddress(), rentAmount);
-            await approveTx.wait();
-            console.log(`   Approval successful.`);
-            await delay(1000); // Delay after approval
-
-            // Deposit rent
-            console.log(`   Depositing rent...`);
-            const depositTx = await rentDistribution.depositRent(tokenInfo.address, rentAmount);
-            await depositTx.wait();
-            console.log(`   ✅ Rent deposited successfully for ${symbol}.`);
-            rentDepositsCount++;
-            await delay(1000); // Delay after deposit
-
-        } catch (error: any) {
-            console.error(`   ❌ Error depositing rent for ${symbol}: ${error.message}`);
-        }
-         await delay(500); // Small delay between properties
-    }
-
-    // --- Prepare Marketplace Listings ---
-    console.log("\nPreparing Marketplace Listings (User actions required)...");
-    let listingsPrepared = 0;
-    let listingsCreatedByDeployer = 0;
-
-    const usdcDecimalsForListing = 6n; // Use hardcoded 6 for USDC
-
+    console.log("\nCreating Marketplace Listings...");
     for (const scenario of LISTING_SCENARIOS) {
         const { userIndex, propertySymbol, amount, pricePerTokenUsdc } = scenario;
         const tokenInfo = propertyTokens[propertySymbol];
+        if (!tokenInfo) {
+            console.warn(`Skipping listing for ${propertySymbol}, token info not found.`);
+            continue;
+        }
         const listingAmount = ethers.parseUnits(amount, 18);
-        // Price per token needs to be formatted based on 18 decimals for PropertyToken and USDC decimals for price
-        const pricePerToken = ethers.parseUnits(pricePerTokenUsdc, Number(usdcDecimalsForListing)); // Price is in USDC units
+        const pricePerToken = ethers.parseUnits(pricePerTokenUsdc, Number(USDC_DECIMALS));
+        const lister = userIndex === -1 ? deployer : await ethers.getSigner(USER_ADDRESSES[userIndex]);
+        const listerAddress = await lister.getAddress();
+        const listerName = userIndex === -1 ? "Deployer" : `User ${userIndex}`;
 
-        if (!tokenInfo) {
-            console.warn(`Cannot prepare listing for ${propertySymbol}, token info not found.`);
-            continue;
-        }
-
-        const actorAddress = userIndex === -1 ? deployer.address : USER_ADDRESSES[userIndex];
-        const actorName = userIndex === -1 ? "Deployer" : `User ${userIndex}`;
-
-        console.log(`\nPreparing listing: ${actorName} lists ${amount} ${propertySymbol} at ${pricePerTokenUsdc} USDC/token.`);
-
+        console.log(`${listerName} listing ${amount} ${propertySymbol} at ${pricePerTokenUsdc} USDC/token...`);
         try {
-            // Check actor's balance
-            const balance = await tokenInfo.contract.balanceOf(actorAddress);
-            console.log(` - ${actorName} balance of ${propertySymbol}: ${ethers.formatUnits(balance, 18)}`);
-
+            const balance = await tokenInfo.contract.balanceOf(listerAddress);
             if (balance < listingAmount) {
-                console.warn(`   ⚠️ Insufficient balance for ${actorName} to list ${amount} ${propertySymbol}. Skipping.`);
+                console.warn(`  ⚠️ ${listerName} has insufficient ${propertySymbol} (${ethers.formatUnits(balance,18)}) to list ${amount}. Skipping.`);
                 continue;
             }
-
-            // If deployer, execute the approval and listing
-            if (userIndex === -1) {
-                console.log(`   Executing listing creation for Deployer...`);
-                // Approve marketplace
-                console.log(`   Approving marketplace (${await propertyMarketplace.getAddress()}) for ${amount} ${propertySymbol}...`);
-                const approveTx = await tokenInfo.contract.connect(deployer).approve(await propertyMarketplace.getAddress(), listingAmount);
-                await approveTx.wait();
-                 console.log(`   Approval successful.`);
-                 await delay(1000);
-
-                // Create listing
-                 console.log(`   Creating listing...`);
-                const listTx = await propertyMarketplace.connect(deployer).createListing(
-                    tokenInfo.address,
-                    listingAmount,
-                    pricePerToken
-                );
-                const receipt = await listTx.wait();
-                 // Find ListingCreated event if possible to get listingId (optional)
-                 const listingCreatedEvent = receipt?.logs?.map(log => { try { return propertyMarketplace.interface.parseLog(log as any); } catch { return null; } }).find(event => event?.name === 'ListingCreated');
-                 const listingId = listingCreatedEvent?.args?.listingId;
-                console.log(`   ✅ Listing created successfully by Deployer (Listing ID: ${listingId ?? 'N/A'}).`);
-                listingsCreatedByDeployer++;
-                 await delay(1000);
-            } else {
-                // Log action required for other users
-                console.log(`   ➡️ ACTION REQUIRED for ${actorName} (${actorAddress}):`);
-                console.log(`      1. Approve Marketplace (${await propertyMarketplace.getAddress()}) to spend ${amount} ${propertySymbol} tokens (${tokenInfo.address}).`);
-                console.log(`      2. Call createListing on Marketplace (${await propertyMarketplace.getAddress()}) with:`);
-                console.log(`         - _propertyToken: ${tokenInfo.address}`);
-                console.log(`         - _tokenAmount: ${listingAmount.toString()}`);
-                console.log(`         - _pricePerToken: ${pricePerToken.toString()}`);
-                listingsPrepared++;
-            }
-        } catch (error: any) {
-            console.error(`   ❌ Error preparing/creating listing for ${propertySymbol} by ${actorName}: ${error.message}`);
+            await tokenInfo.contract.connect(lister).approve(deployedAddresses.propertyMarketplace, listingAmount);
+            await delay(1000);
+            const listTx = await propertyMarketplace.connect(lister).createListing(tokenInfo.address, listingAmount, pricePerToken);
+            const receipt = await listTx.wait();
+            const listingId = receipt?.logs?.map(log => { try { return propertyMarketplace.interface.parseLog(log as any); } catch { return null; } }).find(event => event?.name === 'ListingCreated')?.args?.listingId;
+            console.log(`  ✅ Listing created by ${listerName} (ID: ${listingId ?? 'N/A'}).`);
+            await delay(1000);
+        } catch (e: any) {
+            console.error(`  ❌ Failed to create listing for ${propertySymbol} by ${listerName}: ${e.message}`);
         }
-         await delay(500); // Delay between scenarios
     }
+    await delay(500);
 
-    // --- Prepare DAO Proposals ---
-    console.log("\nPreparing DAO Proposals (User actions required)...");
-    let proposalsPrepared = 0;
-    let proposalsCreatedByDeployer = 0;
-    const daoThreshold = await propertyDAO.proposalThreshold();
-     // Assuming the DAO uses the first property token (MBV) for initial governance checks if not specified differently
-     const primaryDaoGovTokenSymbol = properties[0].symbol; // e.g., MBV
-     const primaryDaoGovTokenAddress = propertyTokens[primaryDaoGovTokenSymbol].address;
-    console.log(`DAO Proposal Threshold: ${daoThreshold.toString()} basis points.`);
+    // --- DAO PROPOSALS ---
+    console.log("\nCreating DAO Proposals for Expo Showcase...");
+    const daoVotingPeriod = await propertyDAO.votingPeriod();
+    const daoExecutionDelay = await propertyDAO.executionDelay();
+    console.log(`DAO Config: Voting Period ${daoVotingPeriod}s, Execution Delay ${daoExecutionDelay}s`);
 
+    const targetRentDistribution = deployedAddresses.rentDistribution;
+    // Placeholder calldata (e.g., for a setMaintenanceBudget(uint256) function)
+    const budgetCalldata = new ethers.Interface(["function setMaintenanceBudget(uint256 budget)"]).encodeFunctionData("setMaintenanceBudget", [ethers.parseUnits("0.01", Number(USDC_DECIMALS))]); // 0.01 USDC
 
-    for (const scenario of PROPOSAL_SCENARIOS) {
-        const { userIndex, propertySymbol, description, targetContractKey, calldata } = scenario;
-        const tokenInfo = propertyTokens[propertySymbol]; // The token relevant TO THE PROPOSAL itself
-        const govTokenToCheck = propertyTokens[primaryDaoGovTokenSymbol].contract; // Token used for threshold check
-        const govTokenAddr = primaryDaoGovTokenAddress;
-
-
-        if (!tokenInfo) {
-            console.warn(`Cannot prepare proposal targeting ${propertySymbol}, token info not found.`);
-            continue;
+    // 1. Immediate Short-Circuit (PASS) - MBV
+    try {
+        const propSymbol = "MBV";
+        const proposerIndex = 0; // User 0 has many MBV
+        const proposer = await ethers.getSigner(USER_ADDRESSES[proposerIndex]);
+        const tokenInfo = propertyTokens[propSymbol];
+        console.log(`\n1. Proposal: Short-circuit PASS for ${propSymbol} by User ${proposerIndex}`);
+        const desc1 = `[Expo Demo] Approve emergency roof repair for ${tokenInfo.name} - 0.01 USDC`;
+        const createTx1 = await propertyDAO.connect(proposer).createProposal(desc1, targetRentDistribution, budgetCalldata, tokenInfo.address);
+        const receipt1 = await createTx1.wait();
+        const proposalId1 = receipt1?.logs?.map(l => { try { return propertyDAO.interface.parseLog(l as any); } catch { return null; } }).find(e => e?.name === "ProposalCreated")?.args?.proposalId;
+        console.log(`  Proposal 1 (${propSymbol}) ID ${proposalId1} created. Voting YES to short-circuit PASS...`);
+        await delay(1000);
+        if (proposalId1 !== undefined) {
+            await propertyDAO.connect(proposer).castVote(proposalId1, true); // Vote YES
+            console.log(`  ✅ Voted YES. Should be 'Passed' (via short-circuit).`);
         }
+        await delay(1000);
+    } catch (e: any) { console.error(`  ❌ Error with Short-circuit PASS proposal: ${e.message}`); }
 
-        const actorAddress = userIndex === -1 ? deployer.address : USER_ADDRESSES[userIndex];
-        const actorName = userIndex === -1 ? "Deployer" : `User ${userIndex}`;
-        const targetContractAddress = deployedAddresses[targetContractKey as keyof DeployedAddresses] || ethers.ZeroAddress; // Get address based on key
-
-        console.log(`\nPreparing proposal: "${description}" by ${actorName} targeting property ${propertySymbol}.`);
-        console.log(` - Target Contract (${targetContractKey}): ${targetContractAddress}`);
-        console.log(` - Governance Token for Threshold Check: ${primaryDaoGovTokenSymbol} (${govTokenAddr})`);
-
-
-        try {
-            // Check proposer's balance of the GOVERNANCE token
-            const balance = await govTokenToCheck.balanceOf(actorAddress);
-            const totalSupply = await govTokenToCheck.totalSupply();
-            console.log(` - ${actorName}'s Governance Token Balance (${primaryDaoGovTokenSymbol}): ${ethers.formatUnits(balance, 18)}`);
-            console.log(` - Total Supply of ${primaryDaoGovTokenSymbol}: ${ethers.formatUnits(totalSupply, 18)}`);
-
-
-            const hasEnoughTokens = totalSupply > 0n ? (balance * 10000n) / totalSupply >= daoThreshold : false;
-
-            if (!hasEnoughTokens) {
-                console.warn(`   ⚠️ Insufficient governance tokens for ${actorName} to create proposal. Needs >= ${daoThreshold.toString()} basis points. Skipping.`);
-                continue;
-            }
-             console.log(`   ✅ ${actorName} meets the proposal threshold.`);
-
-            // If deployer, execute the proposal creation
-            if (userIndex === -1) {
-                 console.log(`   Executing proposal creation for Deployer...`);
-                 try {
-                    const proposeTx = await propertyDAO.connect(deployer).createProposal(
-                        description,
-                        targetContractAddress,
-                        calldata,
-                        tokenInfo.address // The specific property token this proposal relates to
-                    );
-                    const receipt = await proposeTx.wait();
-                     const proposalCreatedEvent = receipt?.logs?.map(log => { try { return propertyDAO.interface.parseLog(log as any); } catch { return null; } }).find(event => event?.name === 'ProposalCreated');
-                     const proposalId = proposalCreatedEvent?.args?.proposalId;
-                    console.log(`   ✅ Proposal created successfully by Deployer (Proposal ID: ${proposalId ?? 'N/A'}).`);
-                    proposalsCreatedByDeployer++;
-                    await delay(1000);
-                 } catch(creationError: any) {
-                      console.error(`  ❌ Error during deployer's proposal creation tx: ${creationError.message}`);
-                 }
-            } else {
-                // Log action required for other users
-                console.log(`   ➡️ ACTION REQUIRED for ${actorName} (${actorAddress}):`);
-                console.log(`      Call createProposal on DAO (${await propertyDAO.getAddress()}) with:`);
-                console.log(`         - _description: "${description}"`);
-                console.log(`         - _targetContract: ${targetContractAddress}`);
-                console.log(`         - _functionCall: "${calldata}"`);
-                console.log(`         - _propertyTokenAddress: ${tokenInfo.address}`); // Crucial: address of the token the proposal is *about*
-                proposalsPrepared++;
-            }
-        } catch (error: any) {
-            console.error(`   ❌ Error preparing/creating proposal for ${propertySymbol} by ${actorName}: ${error.message}`);
+    // 2. Immediate Short-Circuit (FAIL) - MLC
+    try {
+        const propSymbol = "MLC";
+        const proposerIndex = 0; // User 0 (minority holder)
+        const voterIndex = 1; // User 1 (majority holder)
+        const proposer = await ethers.getSigner(USER_ADDRESSES[proposerIndex]);
+        const voter = await ethers.getSigner(USER_ADDRESSES[voterIndex]);
+        const tokenInfo = propertyTokens[propSymbol];
+        console.log(`\n2. Proposal: Short-circuit FAIL for ${propSymbol} by User ${proposerIndex}, voted NO by User ${voterIndex}`);
+        const desc2 = `[Expo Demo] Controversial: Repaint ${tokenInfo.name} exterior pink - 0.01 USDC`;
+        const createTx2 = await propertyDAO.connect(proposer).createProposal(desc2, targetRentDistribution, budgetCalldata, tokenInfo.address);
+        const receipt2 = await createTx2.wait();
+        const proposalId2 = receipt2?.logs?.map(l => { try { return propertyDAO.interface.parseLog(l as any); } catch { return null; } }).find(e => e?.name === "ProposalCreated")?.args?.proposalId;
+        console.log(`  Proposal 2 (${propSymbol}) ID ${proposalId2} created. User ${voterIndex} voting NO to short-circuit FAIL...`);
+        await delay(1000);
+        if (proposalId2 !== undefined) {
+            await propertyDAO.connect(voter).castVote(proposalId2, false); // Vote NO
+            console.log(`  ✅ Voted NO. Should be 'Rejected' (via short-circuit).`);
         }
-         await delay(500); // Delay between scenarios
-    }
+        await delay(1000);
+    } catch (e: any) { console.error(`  ❌ Error with Short-circuit FAIL proposal: ${e.message}`); }
+
+    // 3. End During Expo (Natural PASS) - SFMT (Voting: 1.5hr)
+    // User 2 proposes. User 0 (YES), User 2 (YES). User 1 (NO).
+    try {
+        const propSymbol = "SFMT";
+        const proposerIndex = 2; // User 2
+        const proposer = await ethers.getSigner(USER_ADDRESSES[proposerIndex]);
+        const voter0 = await ethers.getSigner(USER_ADDRESSES[0]);
+        const voter1 = await ethers.getSigner(USER_ADDRESSES[1]);
+        const tokenInfo = propertyTokens[propSymbol];
+        console.log(`\n3. Proposal: Natural PASS for ${propSymbol} (ends in ~1.5hr) by User ${proposerIndex}`);
+        const desc3 = `[Expo Demo] Fund community garden at ${tokenInfo.name} - 0.01 USDC`;
+        const createTx3 = await propertyDAO.connect(proposer).createProposal(desc3, targetRentDistribution, budgetCalldata, tokenInfo.address);
+        const receipt3 = await createTx3.wait();
+        const proposalId3 = receipt3?.logs?.map(l => { try { return propertyDAO.interface.parseLog(l as any); } catch { return null; } }).find(e => e?.name === "ProposalCreated")?.args?.proposalId;
+        console.log(`  Proposal 3 (${propSymbol}) ID ${proposalId3} created. Casting votes...`);
+        await delay(1000);
+        if (proposalId3 !== undefined) {
+            await propertyDAO.connect(voter0).castVote(proposalId3, true);    // User 0 YES
+            console.log(`  User 0 voted YES.`); await delay(500);
+            await propertyDAO.connect(proposer).castVote(proposalId3, true);  // User 2 (proposer) YES
+            console.log(`  User 2 voted YES.`); await delay(500);
+            await propertyDAO.connect(voter1).castVote(proposalId3, false);   // User 1 NO
+            console.log(`  User 1 voted NO.`);
+            console.log(`  ✅ Votes cast. Should pass naturally in ~1.5hr.`);
+        }
+        await delay(1000);
+    } catch (e: any) { console.error(`  ❌ Error with Natural PASS proposal: ${e.message}`); }
+
+    // 4. End During Expo (Natural FAIL) - CDP (Voting: 1.5hr)
+    // User 3 proposes. User 1 (YES). User 0 (NO), User 2 (NO).
+    try {
+        const propSymbol = "CDP";
+        const proposerIndex = 3; // User 3
+        const proposer = await ethers.getSigner(USER_ADDRESSES[proposerIndex]);
+        const voter0 = await ethers.getSigner(USER_ADDRESSES[0]);
+        const voter1 = await ethers.getSigner(USER_ADDRESSES[1]);
+        const voter2 = await ethers.getSigner(USER_ADDRESSES[2]);
+        const tokenInfo = propertyTokens[propSymbol];
+        console.log(`\n4. Proposal: Natural FAIL for ${propSymbol} (ends in ~1.5hr) by User ${proposerIndex}`);
+        const desc4 = `[Expo Demo] Install gold-plated doorknobs at ${tokenInfo.name} - 0.01 USDC`;
+        const createTx4 = await propertyDAO.connect(proposer).createProposal(desc4, targetRentDistribution, budgetCalldata, tokenInfo.address);
+        const receipt4 = await createTx4.wait();
+        const proposalId4 = receipt4?.logs?.map(l => { try { return propertyDAO.interface.parseLog(l as any); } catch { return null; } }).find(e => e?.name === "ProposalCreated")?.args?.proposalId;
+        console.log(`  Proposal 4 (${propSymbol}) ID ${proposalId4} created. Casting votes...`);
+        await delay(1000);
+        if (proposalId4 !== undefined) {
+            await propertyDAO.connect(voter1).castVote(proposalId4, true);    // User 1 YES
+            console.log(`  User 1 voted YES.`); await delay(500);
+            await propertyDAO.connect(voter0).castVote(proposalId4, false);   // User 0 NO
+            console.log(`  User 0 voted NO.`); await delay(500);
+            await propertyDAO.connect(voter2).castVote(proposalId4, false);   // User 2 NO
+            console.log(`  User 2 voted NO.`);
+            console.log(`  ✅ Votes cast. Should fail naturally in ~1.5hr.`);
+        }
+        await delay(1000);
+    } catch (e: any) { console.error(`  ❌ Error with Natural FAIL proposal: ${e.message}`); }
+
+    // 5. Become Executable During Expo - EWID (Voting: 1.5hr, Exec Delay: 30min. Total: ~2hr)
+    // User 0 proposes and votes YES. User 3 votes YES.
+    try {
+        const propSymbol = "EWID";
+        const proposerIndex = 0; // User 0
+        const proposer = await ethers.getSigner(USER_ADDRESSES[proposerIndex]);
+        const voter3 = await ethers.getSigner(USER_ADDRESSES[3]);
+        const tokenInfo = propertyTokens[propSymbol];
+        console.log(`\n5. Proposal: Executable during Expo for ${propSymbol} (Passes in ~1.5hr, Executable in ~2hr) by User ${proposerIndex}`);
+        const desc5 = `[Expo Demo] Upgrade ${tokenInfo.name} internet to gigabit fiber - 0.01 USDC`;
+        const createTx5 = await propertyDAO.connect(proposer).createProposal(desc5, targetRentDistribution, budgetCalldata, tokenInfo.address);
+        const receipt5 = await createTx5.wait();
+        const proposalId5 = receipt5?.logs?.map(l => { try { return propertyDAO.interface.parseLog(l as any); } catch { return null; } }).find(e => e?.name === "ProposalCreated")?.args?.proposalId;
+        console.log(`  Proposal 5 (${propSymbol}) ID ${proposalId5} created. Casting votes...`);
+        await delay(1000);
+        if (proposalId5 !== undefined) {
+            await propertyDAO.connect(proposer).castVote(proposalId5, true); // User 0 YES
+            console.log(`  User 0 voted YES.`); await delay(500);
+            await propertyDAO.connect(voter3).castVote(proposalId5, true);   // User 3 YES
+            console.log(`  User 3 voted YES.`);
+            console.log(`  ✅ Votes cast. Should pass in ~1.5hr, become executable ~30min later.`);
+        }
+        await delay(1000);
+    } catch (e: any) { console.error(`  ❌ Error with 'Executable During Expo' proposal: ${e.message}`); }
 
 
-    // --- Summary ---
-    console.log("\n--- Populate State Summary ---");
-    console.log(`Deployer: ${deployer.address}`);
-    console.log(`Target Users: ${USER_ADDRESSES.join(', ')}`);
-    console.log(`Token Transfers Attempted/Successful: Check logs above (${successfulTransfers} successful transfers logged)`);
-    console.log(`Rent Deposits Successful: ${rentDepositsCount} / ${Object.keys(propertyTokens).length}`);
-    console.log(`Marketplace Listings Created by Deployer: ${listingsCreatedByDeployer}`);
-    console.log(`Marketplace Listings Prepared (Require User Action): ${listingsPrepared}`);
-    console.log(`DAO Proposals Created by Deployer: ${proposalsCreatedByDeployer}`);
-    console.log(`DAO Proposals Prepared (Require User Action): ${proposalsPrepared}`);
-    console.log("\n--- Manual Actions Required ---");
-    console.log("Review the 'ACTION REQUIRED' logs above for steps needed by test users:");
-    console.log(" - Users need to approve the Marketplace and call createListing for their prepared listings.");
-    console.log(" - Users need to call createProposal for their prepared proposals.");
-    console.log(" - Users may need USDC funds deposited to purchase from listings.");
-    console.log(" - Users can now test 'claimRent' for properties where rent was deposited.");
-    console.log("-----------------------------");
-    console.log("Script finished.");
-
+    console.log("\n--- Expo State Population Complete ---");
+    console.log("Summary of created items:");
+    console.log("- Property Tokens Distributed: Review logs for per-property distributions.");
+    console.log("- Rent Deposited: Review logs for per-property deposits.");
+    console.log("- Marketplace Listings: Review logs. All listed items are active.");
+    console.log("- DAO Proposals: 5 diverse proposals created with varying timelines and outcomes for demo.");
+    console.log("\nSCENARIO CHECKLIST FOR EXPO:");
+    console.log("  [ ] Show Property Cards for all 9 properties.");
+    console.log("  [ ] Show individual user token balances for different properties (varied holdings).");
+    console.log("  [ ] Show marketplace: listings by different users and deployer at low prices.");
+    console.log("  [ ] Simulate a marketplace purchase (ensure a user has a tiny bit of USDC).");
+    console.log("  [ ] Show rent claimable for various properties.");
+    console.log("  [ ] Simulate a rent claim.");
+    console.log("  [ ] DAO: Proposal 1 (MBV) - should be 'Passed' (short-circuited).");
+    console.log("  [ ] DAO: Proposal 2 (MLC) - should be 'Rejected' (short-circuited).");
+    console.log("  [ ] DAO: Proposal 3 (SFMT) - check state; should be 'Active', then 'Passed' later.");
+    console.log("  [ ] DAO: Proposal 4 (CDP) - check state; should be 'Active', then 'Rejected' later.");
+    console.log("  [ ] DAO: Proposal 5 (EWID) - check state; should be 'Active', then 'Passed', then 'Pending' (for executionDelay), then 'Executable'.");
+    console.log("  [ ] If Proposal 5 becomes Executable, demonstrate calling 'executeProposal'.");
+    console.log("-------------------------------------");
 }
 
 main()
     .then(() => process.exit(0))
     .catch((error) => {
-        console.error("Error in populateState script:", error);
+        console.error("CRITICAL ERROR in populateState script:", error);
         process.exit(1);
     });

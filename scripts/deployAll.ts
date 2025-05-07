@@ -67,42 +67,77 @@ async function main() {
   const propertyMarketplaceAddress = await propertyMarketplace.getAddress();
   console.log(`PropertyMarketplace deployed to: ${propertyMarketplaceAddress}`);
 
-  // 6. Create individual PropertyTokens for 4 properties
+  // 6. Create individual PropertyTokens for properties
   console.log("\nCreating individual PropertyTokens for properties...");
   
   const properties = [
     {
       name: "Miami Beachfront Villa",
       symbol: "MBV",
-      value: ethers.parseUnits("2500000", 6), // $2.5M
-      supply: ethers.parseUnits("10000", 18)  // 10,000 tokens
+      value: ethers.parseUnits("10", 6), // 10 USDC
+      supply: ethers.parseUnits("10000", 18)
     },
     {
       name: "Manhattan Luxury Condo",
       symbol: "MLC",
-      value: ethers.parseUnits("3200000", 6), // $3.2M
-      supply: ethers.parseUnits("10000", 18)  // 10,000 tokens
+      value: ethers.parseUnits("12", 6), // 12 USDC
+      supply: ethers.parseUnits("10000", 18)
     },
     {
       name: "San Francisco Modern Townhouse",
       symbol: "SFMT",
-      value: ethers.parseUnits("3800000", 6), // $3.8M
-      supply: ethers.parseUnits("10000", 18)  // 10,000 tokens
+      value: ethers.parseUnits("15", 6), // 15 USDC
+      supply: ethers.parseUnits("10000", 18)
     },
     {
       name: "Chicago Downtown Penthouse",
       symbol: "CDP",
-      value: ethers.parseUnits("4200000", 6), // $4.2M
-      supply: ethers.parseUnits("10000", 18)  // 10,000 tokens
+      value: ethers.parseUnits("13", 6), // 13 USDC
+      supply: ethers.parseUnits("10000", 18)
+    },
+    {
+      name: "Ewidas Workspace",
+      symbol: "EWID",
+      value: ethers.parseUnits("5", 6), // 5 USDC
+      supply: ethers.parseUnits("10000", 18)
+    },
+    {
+      name: "Iconic Tower",
+      symbol: "ICON",
+      value: ethers.parseUnits("8", 6), // 8 USDC
+      supply: ethers.parseUnits("10000", 18)
+    },
+    {
+      name: "Pyramids Hotel",
+      symbol: "PYR",
+      value: ethers.parseUnits("7", 6), // 7 USDC
+      supply: ethers.parseUnits("10000", 18)
+    },
+    {
+      name: "Ora SilverSands",
+      symbol: "ORA",
+      value: ethers.parseUnits("9", 6), // 9 USDC
+      supply: ethers.parseUnits("10000", 18)
+    },
+    {
+      name: "SouthMed Villa",
+      symbol: "SMV",
+      value: ethers.parseUnits("6", 6), // 6 USDC
+      supply: ethers.parseUnits("10000", 18)
     }
   ];
 
-  // Define CIDs for each property - ENSURE THESE ARE CORRECT
+  // Define CIDs for each property - USER MUST ENSURE THESE ARE CORRECT AND MATCH THE ABOVE properties ARRAY ORDER
   const propertyCIDs: Record<string, string> = {
-      "Miami Beachfront Villa": "bafkreighvyg3j4ajbssvszw4kzdsovo6sbycfm3cbn6pfw6uqa2qbgmamy",
-      "Manhattan Luxury Condo": "bafkreifzkvccvttmnzhpcmmuz6vwpdsqjz4fcvjwa4milc2mqmojo45roa",
-      "San Francisco Modern Townhouse": "bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau",
-      "Chicago Downtown Penthouse": "bafkreihha34zb3l6f3wcfrig53h6ooyarxg7fpujediqcinzgeb4ok6f5u"
+      "Miami Beachfront Villa": "bafkreighvyg3j4ajbssvszw4kzdsovo6sbycfm3cbn6pfw6uqa2qbgmamy", // Ensure this matches properties[0].name
+      "Manhattan Luxury Condo": "bafkreifzkvccvttmnzhpcmmuz6vwpdsqjz4fcvjwa4milc2mqmojo45roa", // Ensure this matches properties[1].name
+      "San Francisco Modern Townhouse": "bafkreih4fcdvf5mhpjxqfwp43n2r2cq2x7qzqsqp5khxcfbvhfihl7prau", // Ensure this matches properties[2].name
+      "Chicago Downtown Penthouse": "bafkreihha34zb3l6f3wcfrig53h6ooyarxg7fpujediqcinzgeb4ok6f5u",  // Ensure this matches properties[3].name
+      "Ewida's Workspace": "bafkreiamcgrtm3jlq56tpnggy7jqbpk4hsubkp5uexepxheumz6blqb2be",        // Ensure this matches properties[4].name
+      "Iconic Tower": "bafkreib3k5oe323k7pvc5q2mxvxqcbr24xx3mxxezljal5wivaqmv4fgia",          // Ensure this matches properties[5].name
+      "Pyramids Hotel": "bafkreiajjrv6uftvum6mnw5w5kp5wbyafie2q3q3qmvwwxncwfvfiafesq",        // Ensure this matches properties[6].name
+      "Ora SilverSands": "bafkreia4gpyj4s7sbszramgvuo43srqo5noohxsjjc7xarj5oa2fg4pisu",       // Ensure this matches properties[7].name
+      "SouthMed Villa": "bafkreifwzra3tsedyuvr3z2w7d2f56rqnhcdvcmzdpt2plvfezzeomf6sa"         // Ensure this matches properties[8].name
   };
 
   const propertyTokenAddresses: string[] = [];
@@ -111,7 +146,6 @@ async function main() {
     const property = properties[i];
     console.log(`Creating token for ${property.name}...`);
     
-    // We need to cast propertyTokenFactory to any to access the custom method
     const tx = await (propertyTokenFactory as any).createPropertyToken(
       property.name,
       property.symbol,
@@ -120,7 +154,6 @@ async function main() {
     );
     
     const receipt = await tx.wait();
-    // Filter for the PropertyTokenCreated event to get the token address
     const event = receipt.logs.find(
       (log: any) => {
         try {
@@ -147,62 +180,54 @@ async function main() {
     
     propertyTokenAddresses.push(tokenAddress);
     
-    // --- Mint the corresponding NFT for this property --- 
-    const tokenIdToMint = BigInt(i); // Token ID will be 0, 1, 2, 3
-    const propertyName = property.name;
+    const tokenIdToMint = BigInt(i); 
+    const propertyName = property.name; // Use name from the properties array for consistency
     const ipfsCID = propertyCIDs[propertyName];
     if (!ipfsCID) {
-      console.error(`Missing IPFS CID for ${propertyName}, cannot mint NFT.`);
-      continue; // Or handle error appropriately
+      console.error(`Missing IPFS CID for ${propertyName} (expected key: "${propertyName}"), cannot mint NFT.`);
+      continue; 
     }
     const metadataURI = `ipfs://${ipfsCID}`;
-    // Example details - Adjust as needed or fetch from a config
     const propertyLocation = `${propertyName} Location`; 
-    const squareFootage = 2000 + (i * 500);
-    const constructionYear = 2020 - (i * 5); 
+    const squareFootage = 1000 + (i * 200); // Adjusted to be smaller
+    const constructionYear = 2024 - i; 
     const propertyType = "Residential";
     
-    console.log(`Minting NFT for ${propertyName} with tokenId ${tokenIdToMint}...`);
+    console.log(`Minting NFT for ${propertyName} with tokenId ${tokenIdToMint} and CID ${ipfsCID}...`);
     const mintTx = await propertyNFT.mintProperty(
-        deployer.address, // Mint to deployer initially
+        deployer.address, 
         metadataURI,
         propertyLocation,
         BigInt(squareFootage),
-        property.value, // Use property value from config
+        property.value, 
         BigInt(constructionYear),
         propertyType,
-        tokenAddress // Associate with the just created token
+        tokenAddress 
     );
     await mintTx.wait();
     console.log(`NFT ${tokenIdToMint} minted successfully.`);
-    // --- End NFT Minting ---
 
-    // Register in PropertyRegistry
     console.log(`Registering property NFT ${tokenIdToMint} with Token ${tokenAddress} in registry...`);
-    
-    // Use direct function access with type casting for the 3-parameter version
     const registerTx = await (propertyRegistry as any)["registerProperty(address,uint256,address)"](
       propertyNFTAddress,
-      BigInt(i), // Use index as tokenId to make each registration unique
+      BigInt(i), 
       tokenAddress
     );
-    
     await registerTx.wait();
     console.log(`Property ${i} registered in registry.`);
   }
 
-  // 7. Deploy PropertyDAO with the first property token
+  // 7. Deploy PropertyDAO
   console.log("\nDeploying PropertyDAO...");
   const proposalThreshold = 500; // 5%
-  const votingPeriod = 60 * 60 * 24 * 3; // 3 days (in seconds)
-  const executionDelay = 60 * 60 * 24 * 1; // 1 day (in seconds)
+  const votingPeriod = 60 * 90; // 1.5 hours (5400 seconds)
+  const executionDelay = 60 * 30; // 30 minutes (1800 seconds)
   
-  // Use the first property token for DAO governance
-  const firstPropertyToken = propertyTokenAddresses[0];
+  const firstPropertyToken = propertyTokenAddresses[0] || ethers.ZeroAddress; // Fallback if no tokens created
   
   const PropertyDAOFactory = await ethers.getContractFactory("PropertyDAO");
   const propertyDAO = await PropertyDAOFactory.deploy(
-    firstPropertyToken,
+    firstPropertyToken, // This is the constructor arg, though our DAO logic mostly uses per-proposal tokens
     proposalThreshold,
     votingPeriod,
     executionDelay,
@@ -221,7 +246,6 @@ async function main() {
   console.log(`PropertyDAO: ${propertyDAOAddress}`);
   console.log("\n--- Property Tokens ---");
   for (let i = 0; i < properties.length; i++) {
-    // Ensure propertyTokenAddresses has the entry before logging
     if (propertyTokenAddresses[i]) {
       console.log(`${properties[i].name} (${properties[i].symbol}): ${propertyTokenAddresses[i]}`);
     } else {
